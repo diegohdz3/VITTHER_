@@ -24,6 +24,6 @@ class CamaraMediaIntegration(
     suspend fun importarImagenPrivada(uri: Uri): String =
         fotoStore.importar(uri)
 
-    fun eliminarImagenPrivada(rutaRelativa: String?) =
+    suspend fun eliminarImagenPrivada(rutaRelativa: String?) =
         fotoStore.eliminar(rutaRelativa)
 }

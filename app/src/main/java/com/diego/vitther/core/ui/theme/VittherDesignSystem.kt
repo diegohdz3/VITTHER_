@@ -1,7 +1,8 @@
 package com.diego.vitther.core.ui.theme
 
+import androidx.compose.runtime.Composable
+import com.diego.vitther.ui.theme.AccentGold
 import com.diego.vitther.ui.theme.BackgroundPrimary
-import com.diego.vitther.ui.theme.GoldPrimary
 import com.diego.vitther.ui.theme.VITTHERTheme
 
 /**
@@ -9,7 +10,10 @@ import com.diego.vitther.ui.theme.VITTHERTheme
  */
 object VittherDesignSystem {
     val backgroundPrimary = BackgroundPrimary
-    val goldAccent = GoldPrimary
+    val goldAccent = AccentGold
 }
 
-typealias CoreVittherTheme = @androidx.compose.runtime.Composable (content: @androidx.compose.runtime.Composable () -> Unit) -> Unit
+@Composable
+fun CoreVittherTheme(content: @Composable () -> Unit) {
+    VITTHERTheme(content = content)
+}
