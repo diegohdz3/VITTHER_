@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">VITTHER</string>
+    <string name="historia_titulo">Historia de la colección</string>
+    <string name="historia_subtitulo">UN VIAJE A TRAVÉS DEL TIEMPO</string>
+    <string name="historia_volver">Regresar</string>
+    <string name="historia_calendario">Ir a un año de la colección</string>
+    <string name="historia_elegir_anio">Viajar a un año</string>
+    <string name="historia_cerrar">Cerrar</string>
+    <string name="historia_piezas">PIEZAS</string>
+    <string name="historia_colecciones">COLECCIONES</string>
+    <string name="historia_recorrido">RECORRIDO</string>
+    <string name="historia_sin_tiempo">—</string>
+    <string name="historia_primera">Primera pieza adquirida</string>
+    <string name="historia_adquisicion">Nueva pieza adquirida</string>
+    <string name="historia_registro">Incorporada al museo</string>
+    <string name="historia_capsula">Cápsula revelada</string>
+    <string name="historia_vacia">Aquí empieza tu historia</string>
+    <string name="historia_vacia_detalle">Agrega una pieza desde Colección para comenzar tu recorrido.</string>
+    <plurals name="historia_anios"><item quantity="one">%1$d año</item><item quantity="other">%1$d años</item></plurals>
+    <plurals name="historia_meses"><item quantity="one">%1$d mes</item><item quantity="other">%1$d meses</item></plurals>
+    <plurals name="historia_dias"><item quantity="one">%1$d día</item><item quantity="other">%1$d días</item></plurals>
+    <string name="home_exhibido">Exhibido</string>
+    <string name="home_vacia">Tu vitrina está vacía</string>
+    <string name="home_vacia_descripcion">Agrega una pieza desde Colección y ponla en exhibición para darle un lugar en tu museo.</string>
+    <string name="home_sin_foto">Sin fotografía</string>
+    <string name="home_foto">Foto de %1$s</string>
+    <string name="home_anterior">Pieza anterior</string>
+    <string name="home_siguiente">Pieza siguiente</string>
+    <string name="home_pagina">Pieza %1$d de %2$d</string>
+    <string name="home_capsula_hoy">Una cápsula sellada se abre hoy</string>
+    <string name="home_error">No se pudo cargar tu vitrina. Vuelve a entrar en Inicio para intentarlo de nuevo.</string>
+    <plurals name="home_capsula_dias">
+        <item quantity="one">Una cápsula sellada se abre en %1$d día</item>
+        <item quantity="other">Una cápsula sellada se abre en %1$d días</item>
+    </plurals>
+</resources>
