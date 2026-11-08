@@ -26,6 +26,8 @@ class ColeccionViewModel(private val container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val capsulas = container.capsulaRepository.observarTodas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val wishes = container.wishRepository.observarTodos()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     // El contador es en días y la disponibilidad se revisa cada pocos segundos:
     // no hace falta recomponer la pantalla sesenta veces por minuto.
     val ahora = flow {

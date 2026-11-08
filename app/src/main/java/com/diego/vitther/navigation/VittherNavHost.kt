@@ -31,6 +31,7 @@ fun VittherNavHost(
     val destino = entrada?.destination
     val piezas by vm.piezas.collectAsStateWithLifecycle()
     val capsulas by vm.capsulas.collectAsStateWithLifecycle()
+    val wishes by vm.wishes.collectAsStateWithLifecycle()
     val ahora by vm.ahora.collectAsStateWithLifecycle()
     val ocupado by vm.ocupado.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
@@ -115,7 +116,10 @@ fun VittherNavHost(
                     piezas = piezas.orEmpty(),
                     archivo = vm::archivo,
                     volver = { nav.popBackStack() },
-                    abrir = { nav.navigate(Cedula(it)) }
+                    abrir = { nav.navigate(Cedula(it)) },
+                    capsulas = capsulas.orEmpty(),
+                    wishes = wishes,
+                    ahora = ahora
                 )
             }
             composable<Perfil> {
