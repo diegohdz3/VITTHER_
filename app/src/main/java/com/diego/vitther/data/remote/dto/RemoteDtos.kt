@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * DTOs de respuesta y petición para el servicio externo de catálogo y
- * la sincronización con Firebase Realtime Database / REST API.
+ * la sincronización completa (piezas, cápsulas y wishes) con Firebase Realtime Database / REST API.
  */
 @Serializable
 data class JikanCharacterSearchResponseDto(
@@ -40,10 +40,37 @@ data class PiezaCloudDto(
 )
 
 @Serializable
+data class CapsulaCloudDto(
+    val idLocal: Long,
+    val piezaId: Long,
+    val titulo: String? = null,
+    val fechaApertura: Long,
+    val abiertaEn: Long? = null,
+    val notaRevelada: String? = null
+)
+
+@Serializable
+data class WishCloudDto(
+    val idLocal: Long,
+    val nombre: String,
+    val franquicia: String,
+    val linea: String? = null,
+    val estado: String,
+    val metaPesos: Long? = null,
+    val progresoPorcentaje: Int = 0,
+    val fechaEstimadaLlegada: Long? = null,
+    val creadoEn: Long
+)
+
+@Serializable
 data class RespaldoFirebaseDto(
     val coleccionista: String,
     val versionApp: String,
     val actualizadoEn: Long,
     val totalPiezas: Int,
-    val piezas: List<PiezaCloudDto>
+    val totalCapsulas: Int = 0,
+    val totalWishes: Int = 0,
+    val piezas: List<PiezaCloudDto> = emptyList(),
+    val capsulas: List<CapsulaCloudDto> = emptyList(),
+    val wishes: List<WishCloudDto> = emptyList()
 )

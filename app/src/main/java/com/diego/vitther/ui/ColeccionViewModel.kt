@@ -86,14 +86,20 @@ class ColeccionViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun sincronizarConFirebase(urlPersonalizada: String? = null) = ejecutar {
-        val actuales = piezas.value.orEmpty()
+        val actualesPiezas = piezas.value.orEmpty()
+        val actualesCapsulas = capsulas.value.orEmpty()
+        val actualesWishes = wishes.value
         val repo = if (!urlPersonalizada.isNullOrBlank()) {
             val client = com.diego.vitther.data.remote.api.VittherRemoteApiClient(firebaseBaseUrl = urlPersonalizada.trim().removeSuffix("/"))
             com.diego.vitther.data.repository.CatalogoRemotoRepository(client, client)
         } else {
             container.catalogoRemotoRepository
         }
-        val resultado = repo.respaldarEnFirebase(actuales)
+        val resultado = repo.respaldarEnFirebase(
+            piezas = actualesPiezas,
+            capsulas = actualesCapsulas,
+            wishes = actualesWishes
+        )
         _estadoFirebase.value = resultado.mensaje
     }
 
