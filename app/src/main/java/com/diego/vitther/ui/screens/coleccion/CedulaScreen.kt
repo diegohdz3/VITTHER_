@@ -5,12 +5,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.diego.vitther.data.local.PiezaEntity
 import com.diego.vitther.domain.*
 import com.diego.vitther.ui.ColeccionViewModel
 import com.diego.vitther.ui.components.*
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun CedulaScreen(pieza: PiezaEntity?, vm: ColeccionViewModel, ocupado: Boolean,
@@ -21,17 +25,41 @@ fun CedulaScreen(pieza: PiezaEntity?, vm: ColeccionViewModel, ocupado: Boolean,
         return
     }
     var confirmar by remember { mutableStateOf(false) }
+    var mostrarValor by rememberSaveable(pieza.id) { mutableStateOf(false) }
+    val formatoMoneda = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-MX")) }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         TextButton(onClick = volver) { Text("Volver") }
         FotoPieza(vm.archivo(pieza.fotoPath), pieza.nombre, Modifier.fillMaxWidth().height(320.dp))
         Text(pieza.nombre, style = MaterialTheme.typography.headlineMedium)
         Text(pieza.franquicia, color = MaterialTheme.colorScheme.primary)
-        Text(pieza.estado.etiqueta, style = MaterialTheme.typography.labelLarge)
+        pieza.linea?.takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(pieza.estado.etiqueta, style = MaterialTheme.typography.labelLarge)
+            if (pieza.edicionLimitada) {
+                val badge = pieza.numeroEdicion?.takeIf { it.isNotBlank() }?.let { "Edición limitada · $it" } ?: "Edición limitada"
+                Text("·  $badge", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+        }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Dato("Adquirida", Fechas.formatearLargo(pieza.fechaAdquisicion))
+        Dato("Línea / Fabricante", pieza.linea ?: "No especificada")
         Dato("Procedencia", pieza.procedencia ?: "Aún no registrada")
         Dato("Ubicación", pieza.ubicacion ?: "Aún no registrada")
+        pieza.valorEstimadoCentavos?.let { centavos ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Dato(
+                    "Valor estimado",
+                    if (mostrarValor) formatoMoneda.format(centavos / 100.0) else "•••••• MXN"
+                )
+                TextButton(onClick = { mostrarValor = !mostrarValor }) {
+                    Text(if (mostrarValor) "Ocultar" else "Mostrar")
+                }
+            }
+        }
         Dato("Su historia", pieza.notaPersonal ?: "Cada pieza tiene una historia. Puedes escribir la suya al editar la cédula.")
         OutlinedButton(enabled = !ocupado, onClick = { vm.mover(pieza) }, modifier = Modifier.fillMaxWidth()) {
             Text(if (pieza.estado == EstadoPieza.EXHIBICION) "Mover a bodega" else "Poner en exhibición")
