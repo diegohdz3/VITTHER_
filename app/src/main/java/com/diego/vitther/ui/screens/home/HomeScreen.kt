@@ -1,6 +1,9 @@
 package com.diego.vitther.ui.screens.home
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
@@ -12,71 +15,132 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.diego.vitther.R
 import com.diego.vitther.domain.model.ResumenMuseoModel
 import com.diego.vitther.ui.components.*
 import com.diego.vitther.ui.theme.VITTHERTheme
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 
-private val formatoFechaHome = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", Locale.forLanguageTag("es-MX"))
-
 @Composable
-fun HomeRoute(onPiezaClick: (Long) -> Unit, vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory)) {
+fun HomeRoute(
+    onPiezaClick: (Long) -> Unit,
+    onAbrirColeccion: () -> Unit = {},
+    vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
+) {
     val estado by vm.estado.collectAsStateWithLifecycle()
-    HomeScreen(estado, onPiezaClick)
+    HomeScreen(estado, onPiezaClick, onAbrirColeccion = onAbrirColeccion)
 }
 
 /** Pantalla independiente de Navigation; la integración decide qué hacer al tocar una pieza. */
 @Composable
-fun HomeScreen(estado: HomeUiState, onPiezaClick: (Long) -> Unit, modifier: Modifier = Modifier) {
-    val fechaHoy = remember {
-        LocalDate.now().format(formatoFechaHome).uppercase(Locale.forLanguageTag("es-MX"))
-    }
+fun HomeScreen(
+    estado: HomeUiState,
+    onPiezaClick: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+    onAbrirColeccion: () -> Unit = {}
+) {
     Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val ancho = maxWidth
-            val anchoTarjeta = (ancho * .68f).coerceAtMost(360.dp)
-            val altoTarjeta = (maxHeight * .50f).coerceIn(220.dp, 440.dp)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.primary)
-                    Text(fechaHoy, style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider(Modifier.width(96.dp), thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+            val anchoTarjeta = (ancho * .64f).coerceIn(220.dp, 260.dp)
+            val altoTarjeta = 330.dp
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 18.dp, bottom = 36.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header: Logo centrado arriba y debajo la frase "Tu museo, hoy." centrada
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    VittherLogo(size = 54.dp)
+                    Text(
+                        text = buildAnnotatedString {
+                            append("Tu museo, ")
+                            withStyle(
+                                SpanStyle(
+                                    fontStyle = FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                append("hoy.")
+                            }
+                        },
+                        fontSize = 22.sp,
+                        fontFamily = FontFamily.Serif,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = TextAlign.Center
+                    )
                 }
-                val dias = when (estado) {
-                    is HomeUiState.Contenido -> estado.diasHastaCapsula
-                    is HomeUiState.Vacia -> estado.diasHastaCapsula
-                    else -> null
-                }
-                if (dias != null) AvisoCapsula(dias)
+
+                Spacer(Modifier.height(14.dp))
+
                 when (estado) {
                     HomeUiState.Cargando -> CircularProgressIndicator(Modifier.padding(48.dp))
-                    HomeUiState.Error -> Text(stringResource(R.string.home_error), Modifier.padding(24.dp),
-                        textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    is HomeUiState.Vacia -> Column(Modifier.padding(horizontal = 32.dp, vertical = 48.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(stringResource(R.string.home_vacia), style = MaterialTheme.typography.headlineSmall,
-                            textAlign = TextAlign.Center)
-                        Text(stringResource(R.string.home_vacia_descripcion), textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    HomeUiState.Error -> Text(
+                        stringResource(R.string.home_error),
+                        Modifier.padding(24.dp),
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    is HomeUiState.Vacia -> {
+                        Column(
+                            Modifier.padding(horizontal = 32.dp, vertical = 36.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.home_vacia),
+                                style = MaterialTheme.typography.headlineSmall,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                stringResource(R.string.home_vacia_descripcion),
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                         if (estado.resumen.totalPiezas > 0) {
-                            TiraEstadoMuseo(estado.resumen)
+                            TiraEstadoMuseo(estado.resumen, onAbrirColeccion)
+                        }
+                        if (estado.diasHastaCapsula != null || estado.proximaCapsula != null) {
+                            Spacer(Modifier.height(22.dp))
+                            SeccionProximaCapsula(
+                                dias = estado.diasHastaCapsula ?: estado.proximaCapsula?.diasRestantes ?: 0L,
+                                info = estado.proximaCapsula,
+                                onPiezaClick = onPiezaClick
+                            )
+                        }
+                        estado.recuerdoHoy?.let { rec ->
+                            Spacer(Modifier.height(22.dp))
+                            SeccionUnDiaComoHoy(rec, onPiezaClick)
                         }
                     }
                     is HomeUiState.Contenido -> {
@@ -86,29 +150,41 @@ fun HomeScreen(estado: HomeUiState, onPiezaClick: (Long) -> Unit, modifier: Modi
                             val scope = rememberCoroutineScope()
                             val actual by remember { derivedStateOf { pager.currentPage } }
                             val moviendo by remember { derivedStateOf { pager.isScrollInProgress } }
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+
+                            Box(Modifier.fillMaxWidth().height(348.dp), contentAlignment = Alignment.Center) {
                                 HorizontalPager(
-                                    state = pager, pageSize = PageSize.Fixed(anchoTarjeta),
+                                    state = pager,
+                                    pageSize = PageSize.Fixed(anchoTarjeta),
                                     contentPadding = PaddingValues(horizontal = (ancho - anchoTarjeta) / 2),
-                                    pageSpacing = 12.dp, beyondViewportPageCount = 2,
-                                    key = { piezas[it].id }, modifier = Modifier.fillMaxWidth()
+                                    pageSpacing = 12.dp,
+                                    beyondViewportPageCount = 2,
+                                    key = { piezas[it].id },
+                                    modifier = Modifier.fillMaxWidth()
                                 ) { pagina ->
                                     val pieza = piezas[pagina]
-                                    PiezaCarouselCard(pieza.foto, pieza.nombre,
+                                    PiezaCarouselCard(
+                                        foto = pieza.foto,
+                                        nombre = pieza.nombre,
                                         enabled = pagina == actual && !moviendo,
                                         onClick = { onPiezaClick(pieza.id) },
-                                        modifier = Modifier.fillMaxWidth().height(altoTarjeta).graphicsLayer {
-                                            // Se lee en la fase de dibujo: el gesto no recompone la tarjeta.
-                                            val offset = (pager.currentPage - pagina) + pager.currentPageOffsetFraction
-                                            val distancia = offset.absoluteValue.coerceIn(0f, 2f)
-                                            rotationY = offset.coerceIn(-1.5f, 1.5f) * -32f
-                                            scaleX = 1f - .15f * distancia
-                                            scaleY = 1f - .15f * distancia
-                                            alpha = (1f - .42f * distancia).coerceAtLeast(.12f)
-                                            cameraDistance = 18f * density
-                                        })
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(altoTarjeta)
+                                            .graphicsLayer {
+                                                val offset = (pager.currentPage - pagina) + pager.currentPageOffsetFraction
+                                                val distancia = offset.absoluteValue.coerceIn(0f, 2f)
+                                                rotationY = offset.coerceIn(-1.5f, 1.5f) * -28f
+                                                scaleX = 1f - .16f * distancia
+                                                scaleY = 1f - .16f * distancia
+                                                alpha = (1f - .45f * distancia).coerceAtLeast(.12f)
+                                                cameraDistance = 18f * density
+                                            }
+                                    )
                                 }
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
                                     FlechaCarrusel(true, actual > 0 && !moviendo, {
                                         scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) }
                                     })
@@ -117,28 +193,71 @@ fun HomeScreen(estado: HomeUiState, onPiezaClick: (Long) -> Unit, modifier: Modi
                                     })
                                 }
                             }
+
                             val central = piezas[actual.coerceIn(0, piezas.lastIndex)]
-                            Column(Modifier.padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(central.nombre, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
-                                Text(central.franquicia.uppercase(Locale.forLanguageTag("es-MX")),
-                                    style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center)
+                            Column(
+                                Modifier
+                                    .padding(horizontal = 24.dp, vertical = 6.dp)
+                                    .clickable { onPiezaClick(central.id) },
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    text = central.nombre,
+                                    fontSize = 26.sp,
+                                    fontFamily = FontFamily.Serif,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = central.franquicia.uppercase(Locale.forLanguageTag("es-MX")),
+                                    fontSize = 11.sp,
+                                    letterSpacing = 2.4.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
                                 central.linea?.takeIf { it.isNotBlank() }?.let { lineaTexto ->
-                                    Text(lineaTexto, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
+                                    Text(
+                                        text = lineaTexto,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
                                 if (central.edicionLimitada) {
                                     val etiquetaEdicion = central.numeroEdicion?.takeIf { it.isNotBlank() }
                                         ?.let { "Edición limitada · $it" } ?: "Edición limitada"
-                                    Text(etiquetaEdicion, style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.tertiary, textAlign = TextAlign.Center)
+                                    Text(
+                                        etiquetaEdicion,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
-                                EstadoExhibidoPill()
                             }
-                            IndicadoresCarrusel(piezas.size, actual.coerceIn(0, piezas.lastIndex), Modifier.widthIn(max = ancho - 48.dp))
-                            if (estado.resumen.totalPiezas > 0) {
-                                TiraEstadoMuseo(estado.resumen)
+
+                            Spacer(Modifier.height(6.dp))
+                            IndicadoresCarrusel(
+                                piezas.size,
+                                actual.coerceIn(0, piezas.lastIndex),
+                                Modifier.widthIn(max = ancho - 48.dp)
+                            )
+
+                            Spacer(Modifier.height(14.dp))
+                            TiraEstadoMuseo(estado.resumen, onAbrirColeccion)
+
+                            if (estado.diasHastaCapsula != null || estado.proximaCapsula != null) {
+                                Spacer(Modifier.height(22.dp))
+                                SeccionProximaCapsula(
+                                    dias = estado.diasHastaCapsula ?: estado.proximaCapsula?.diasRestantes ?: 0L,
+                                    info = estado.proximaCapsula,
+                                    onPiezaClick = onPiezaClick
+                                )
+                            }
+
+                            estado.recuerdoHoy?.let { rec ->
+                                Spacer(Modifier.height(22.dp))
+                                SeccionUnDiaComoHoy(rec, onPiezaClick)
                             }
                         }
                     }
@@ -149,58 +268,228 @@ fun HomeScreen(estado: HomeUiState, onPiezaClick: (Long) -> Unit, modifier: Modi
 }
 
 @Composable
-private fun TiraEstadoMuseo(resumen: ResumenMuseoModel) {
+private fun TiraEstadoMuseo(resumen: ResumenMuseoModel, onAbrirColeccion: () -> Unit = {}) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFF141414),
+        border = BorderStroke(1.dp, Color(0xFF26231C))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 14.dp, horizontal = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .clickable { onAbrirColeccion() }
+                .padding(vertical = 16.dp, horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             MetricaMuseo("${resumen.totalPiezas}", "PIEZAS", Modifier.weight(1f))
-            VerticalDivider(Modifier.height(28.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            MetricaMuseo("${resumen.enExhibicion}", "EXHIBIDAS", Modifier.weight(1f))
-            VerticalDivider(Modifier.height(28.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            MetricaMuseo("${resumen.enBodega}", "EN BODEGA", Modifier.weight(1f))
-            VerticalDivider(Modifier.height(28.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            MetricaMuseo("${resumen.totalFranquicias}", "FRANQUICIAS", Modifier.weight(1f))
+            VerticalDivider(Modifier.height(34.dp), color = Color(0xFF26231C))
+            MetricaMuseo("${resumen.enExhibicion}", "MUSEO", Modifier.weight(1f))
+            VerticalDivider(Modifier.height(34.dp), color = Color(0xFF26231C))
+            MetricaMuseo("${resumen.enBodega}", "BODEGA", Modifier.weight(1f))
+            VerticalDivider(Modifier.height(34.dp), color = Color(0xFF26231C))
+            MetricaMuseo("${resumen.totalFranquicias}", "FRANQ.", Modifier.weight(1f))
         }
     }
 }
 
 @Composable
 private fun MetricaMuseo(valor: String, etiqueta: String, modifier: Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(valor, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-        Text(etiqueta, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = valor,
+            fontSize = 24.sp,
+            fontFamily = FontFamily.Serif,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = etiqueta,
+            fontSize = 9.sp,
+            letterSpacing = 1.6.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
 @Composable
-private fun AvisoCapsula(dias: Long) {
-    val texto = if (dias == 0L) stringResource(R.string.home_capsula_hoy)
-        else pluralStringResource(R.plurals.home_capsula_dias, dias.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), dias)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        HorizontalDivider(Modifier.width(24.dp), color = MaterialTheme.colorScheme.outline)
-        Text(texto, Modifier.weight(1f), textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        HorizontalDivider(Modifier.width(24.dp), color = MaterialTheme.colorScheme.outline)
+private fun SeccionProximaCapsula(
+    dias: Long,
+    info: ProximaCapsulaHome?,
+    onPiezaClick: (Long) -> Unit
+) {
+    val gold = MaterialTheme.colorScheme.primary
+    val textoFallback = if (dias == 0L) stringResource(R.string.home_capsula_hoy)
+    else pluralStringResource(R.plurals.home_capsula_dias, dias.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), dias)
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "PRÓXIMA CÁPSULA",
+            fontSize = 11.sp,
+            letterSpacing = 2.4.sp,
+            color = gold
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = info != null) { info?.let { onPiezaClick(it.piezaId) } },
+            shape = RoundedCornerShape(18.dp),
+            color = Color(0xFF141414),
+            border = BorderStroke(1.dp, Color(0xFF26231C))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                    val progreso = info?.progresoAnillo ?: 0.78f
+                    Canvas(Modifier.fillMaxSize()) {
+                        val grosor = 2.5.dp.toPx()
+                        drawCircle(
+                            color = Color(0xFF26231C),
+                            style = Stroke(width = grosor)
+                        )
+                        drawArc(
+                            color = gold,
+                            startAngle = -90f,
+                            sweepAngle = 360f * progreso,
+                            useCenter = false,
+                            style = Stroke(width = grosor, cap = StrokeCap.Round)
+                        )
+                    }
+                    Surface(
+                        modifier = Modifier.size(46.dp),
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFF0A0A0A)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "$dias",
+                                fontSize = 18.sp,
+                                fontFamily = FontFamily.Serif,
+                                color = gold
+                            )
+                        }
+                    }
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    val titulo = when {
+                        dias == 0L -> "Lista para abrir hoy"
+                        dias == 1L -> "Se abre en 1 día"
+                        else -> "Se abre en $dias días"
+                    }
+                    Text(
+                        text = titulo,
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily.Serif,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = if (info != null) "Sellada para ${info.nombrePieza}" else textoFallback,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = "›",
+                    fontSize = 22.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun SeccionUnDiaComoHoy(
+    recuerdo: RecuerdoHoyHome,
+    onPiezaClick: (Long) -> Unit
+) {
+    val gold = MaterialTheme.colorScheme.primary
+    val borderGold = Color(0xFF5A4A22)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .clickable { onPiezaClick(recuerdo.piezaId) },
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "UN DÍA COMO HOY",
+            fontSize = 11.sp,
+            letterSpacing = 2.4.sp,
+            color = gold
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    drawLine(
+                        color = borderGold,
+                        startStart = Offset(0f, 4.dp.toPx()),
+                        end = Offset(0f, size.height - 4.dp.toPx()),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+                .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "“${recuerdo.nota}”",
+                fontSize = 16.sp,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onBackground,
+                lineHeight = 23.sp
+            )
+            Text(
+                text = "${recuerdo.nombrePieza} · hace ${recuerdo.haceDias} días",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLine(
+    color: Color,
+    startStart: Offset,
+    end: Offset,
+    strokeWidth: Float
+) {
+    drawLine(color = color, start = startStart, end = end, strokeWidth = strokeWidth)
 }
 
 @Preview(showBackground = true, widthDp = 393, heightDp = 760)
 @Composable
 private fun HomePreview() {
     VITTHERTheme {
-        HomeScreen(HomeUiState.Contenido(listOf(
-            PiezaHome(1, "Goku Ultra Instinct", "Dragon Ball", linea = "S.H. Figuarts", edicionLimitada = true, numeroEdicion = "0142/2000"),
-            PiezaHome(2, "Spider-Man Integrated Suit", "Marvel"),
-            PiezaHome(3, "Guts Berserker Armor", "Berserk")
-        ), 12, ResumenMuseoModel(12, 8, 4, 5, 4500000L)), {})
+        HomeScreen(
+            HomeUiState.Contenido(
+                listOf(
+                    PiezaHome(1, "Goku Ultra Instinct", "Dragon Ball", linea = "S.H. Figuarts", edicionLimitada = true, numeroEdicion = "0142/2000"),
+                    PiezaHome(2, "Spider-Man Integrated Suit", "Marvel"),
+                    PiezaHome(3, "Guts Berserker Armor", "Berserk")
+                ),
+                7,
+                ResumenMuseoModel(6, 4, 2, 5, 4500000L),
+                ProximaCapsulaHome(3, "Guts Berserker Armor", 7, 0.78f),
+                RecuerdoHoyHome(1, "Goku Ultra Instinct", "Llegó antes de lo que esperaba. Ya tiene su lugar.", 28)
+            ),
+            {}
+        )
     }
 }
 

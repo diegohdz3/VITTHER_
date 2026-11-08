@@ -3,6 +3,7 @@ package com.diego.vitther.navigation
 import kotlinx.serialization.Serializable
 
 @Serializable data object Inicio
+@Serializable data object Wishes
 @Serializable data object Categorias
 @Serializable data object Coleccion
 @Serializable data class ColeccionCategoria(val franquicia: String)

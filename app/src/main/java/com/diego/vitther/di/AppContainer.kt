@@ -9,6 +9,7 @@ import com.diego.vitther.data.remote.api.VittherRemoteApiClient
 import com.diego.vitther.data.repository.CapsulaRepository
 import com.diego.vitther.data.repository.CatalogoRemotoRepository
 import com.diego.vitther.data.repository.PiezaRepository
+import com.diego.vitther.data.repository.WishRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,6 +28,7 @@ class AppContainer(context: Context) {
 
     val piezaRepository = PiezaRepository(baseDatos.piezaDao())
     val capsulaRepository = CapsulaRepository(baseDatos.capsulaDao())
+    val wishRepository = WishRepository(baseDatos.wishDao())
     val catalogoRemotoRepository = CatalogoRemotoRepository(remoteClient, remoteClient)
     val fotos = com.diego.vitther.data.media.FotoStore(appContext)
 
@@ -35,11 +37,15 @@ class AppContainer(context: Context) {
         if (esDepurable) {
             alcance.launch {
                 val preferencias = appContext.getSharedPreferences("demo", Context.MODE_PRIVATE)
-                if (!preferencias.getBoolean("sembrado", false)) {
+                if (!preferencias.getBoolean("sembrado_v2", false)) {
                     baseDatos.withTransaction {
-                        SeedData.sembrarSiEstaVacio(baseDatos.piezaDao(), baseDatos.capsulaDao())
+                        SeedData.sembrarSiEstaVacio(
+                            baseDatos.piezaDao(),
+                            baseDatos.capsulaDao(),
+                            baseDatos.wishDao()
+                        )
                     }
-                    preferencias.edit().putBoolean("sembrado", true).apply()
+                    preferencias.edit().putBoolean("sembrado_v2", true).apply()
                 }
             }
         }
