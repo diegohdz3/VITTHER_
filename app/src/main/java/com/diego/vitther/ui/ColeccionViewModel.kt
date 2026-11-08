@@ -8,16 +8,17 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.diego.vitther.VittherApp
 import com.diego.vitther.data.local.PiezaEntity
+import com.diego.vitther.data.repository.FichaCatalogoRemoto
 import com.diego.vitther.di.AppContainer
 import com.diego.vitther.domain.EstadoPieza
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flow
 
 class ColeccionViewModel(private val container: AppContainer) : ViewModel() {
     // Null distingue la carga inicial de una colección realmente vacía.
@@ -37,7 +38,17 @@ class ColeccionViewModel(private val container: AppContainer) : ViewModel() {
     val ocupado = _ocupado.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+
+    // Estado para la consulta a la API externa (Jikan REST API v4) y sincronización con Firebase.
+    private val _sugerenciasRemotas = MutableStateFlow<List<FichaCatalogoRemoto>>(emptyList())
+    val sugerenciasRemotas = _sugerenciasRemotas.asStateFlow()
+    private val _buscandoApi = MutableStateFlow(false)
+    val buscandoApi = _buscandoApi.asStateFlow()
+    private val _estadoFirebase = MutableStateFlow<String?>(null)
+    val estadoFirebase = _estadoFirebase.asStateFlow()
+
     fun limpiarError() { _error.value = null }
+    fun limpiarSugerenciasRemotas() { _sugerenciasRemotas.value = emptyList() }
     fun archivo(ruta: String?) = container.fotos.archivo(ruta)
 
     private fun ejecutar(accion: suspend () -> Unit) {
@@ -50,6 +61,40 @@ class ColeccionViewModel(private val container: AppContainer) : ViewModel() {
             finally { _ocupado.value = false }
         }
     }
+
+    fun buscarEnApiCatalogo(consulta: String) {
+        if (consulta.isBlank() || _buscandoApi.value) return
+        _buscandoApi.value = true
+        viewModelScope.launch {
+            try {
+                container.catalogoRemotoRepository.buscarEnCatalogoOnline(consulta)
+                    .onSuccess { lista ->
+                        _sugerenciasRemotas.value = lista
+                        if (lista.isEmpty()) {
+                            _error.value = "No se encontraron coincidencias en el catálogo en línea para \"$consulta\"."
+                        }
+                    }
+                    .onFailure {
+                        _error.value = "No fue posible conectar con la API del catálogo externo. Revisa tu conexión a internet."
+                    }
+            } finally {
+                _buscandoApi.value = false
+            }
+        }
+    }
+
+    fun sincronizarConFirebase(urlPersonalizada: String? = null) = ejecutar {
+        val actuales = piezas.value.orEmpty()
+        val repo = if (!urlPersonalizada.isNullOrBlank()) {
+            val client = com.diego.vitther.data.remote.api.VittherRemoteApiClient(firebaseBaseUrl = urlPersonalizada.trim().removeSuffix("/"))
+            com.diego.vitther.data.repository.CatalogoRemotoRepository(client, client)
+        } else {
+            container.catalogoRemotoRepository
+        }
+        val resultado = repo.respaldarEnFirebase(actuales)
+        _estadoFirebase.value = resultado.mensaje
+    }
+
     fun importar(uri: Uri, resultado: (String) -> Unit) = ejecutar {
         resultado(container.fotos.importar(uri))
     }
