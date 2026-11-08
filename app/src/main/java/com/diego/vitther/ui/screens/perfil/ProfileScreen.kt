@@ -44,10 +44,17 @@ fun ProfileScreen(
     totalPiezas: Int?,
     totalCategorias: Int?,
     ahora: Long,
-    identity: ProfileIdentity = ProfileIdentity()
+    identity: ProfileIdentity = ProfileIdentity(),
+    estadoFirebase: String? = null,
+    sincronizando: Boolean = false,
+    onSincronizarFirebase: ((String?) -> Unit)? = null
 ) {
     var opcion by rememberSaveable { mutableStateOf<String?>(null) }
+    var firebaseUrlInput by rememberSaveable {
+        mutableStateOf("https://vitther-museo-default-rtdb.firebaseio.com")
+    }
     val items = listOf(
+        ProfileMenuEntry(Icons.Outlined.CloudUpload, "Respaldo en Firebase Realtime DB") { opcion = "Respaldo en Firebase Realtime DB" },
         ProfileMenuEntry(Icons.Outlined.Person, "Cuenta") { opcion = "Cuenta" },
         ProfileMenuEntry(Icons.Outlined.Notifications, "Notificaciones") { opcion = "Notificaciones" },
         ProfileMenuEntry(Icons.Outlined.LightMode, "Apariencia") { opcion = "Apariencia" },
@@ -72,16 +79,47 @@ fun ProfileScreen(
         Spacer(Modifier.height(26.dp))
         ProfileMenuList(items)
         Spacer(Modifier.height(20.dp))
-        Text("Tu colección se guarda en este dispositivo.", style = MaterialTheme.typography.bodySmall,
+        Text("Tu colección se guarda localmente con Room y permite respaldo en Firebase.", style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
     }
     opcion?.let { titulo ->
         AlertDialog(onDismissRequest = { opcion = null }, title = { Text(titulo) },
             text = {
-                if (titulo == "Notificaciones" || titulo == "Preferencias de cápsula del tiempo") {
-                    AvisosCapsulas()
-                } else {
-                    Text("Esta sección estará disponible próximamente.")
+                when (titulo) {
+                    "Notificaciones", "Preferencias de cápsula del tiempo" -> {
+                        AvisosCapsulas()
+                    }
+                    "Respaldo en Firebase Realtime DB" -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                "Sincroniza las cédulas y metadatos de tu museo hacia tu nodo de Firebase Realtime Database mediante REST API.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            OutlinedTextField(
+                                value = firebaseUrlInput,
+                                onValueChange = { firebaseUrlInput = it },
+                                label = { Text("URL de Firebase Realtime Database") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (sincronizando) {
+                                LinearProgressIndicator(Modifier.fillMaxWidth())
+                            }
+                            Button(
+                                enabled = !sincronizando && onSincronizarFirebase != null,
+                                onClick = { onSincronizarFirebase?.invoke(firebaseUrlInput) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (sincronizando) "Sincronizando..." else "Sincronizar museo con Firebase")
+                            }
+                            estadoFirebase?.let { msg ->
+                                Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    else -> {
+                        Text("Esta sección estará disponible próximamente.")
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { opcion = null }) { Text("Cerrar") } })

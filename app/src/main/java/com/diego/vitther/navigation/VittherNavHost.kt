@@ -101,10 +101,14 @@ fun VittherNavHost(
                     volver = { nav.popBackStack() }, abrir = { nav.navigate(Cedula(it)) })
             }
             composable<Perfil> {
+                val estadoFirebase by vm.estadoFirebase.collectAsStateWithLifecycle()
                 ProfileScreen(
                     totalPiezas = piezas?.size,
                     totalCategorias = piezas?.map { it.franquicia }?.distinct()?.size,
-                    ahora = ahora
+                    ahora = ahora,
+                    estadoFirebase = estadoFirebase,
+                    sincronizando = ocupado,
+                    onSincronizarFirebase = { url -> vm.sincronizarConFirebase(url) }
                 )
             }
             composable<Cedula> { entry ->
