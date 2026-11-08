@@ -1,9 +1,16 @@
 package com.diego.vitther.navigation
 
-import com.diego.vitther.navigation.Destino
-
 /**
  * Definición central de rutas y grafo de navegación según la sección 5 de la guía MVVM
  * (navigation/Routes.kt y navigation/AppNavGraph.kt).
  */
-typealias Routes = Destino
+object Routes {
+    val inicio = Inicio
+    val categorias = Categorias
+    val coleccion = Coleccion
+    val historia = Historia
+    val perfil = Perfil
+    fun coleccionPorCategoria(franquicia: String) = ColeccionCategoria(franquicia)
+    fun cedula(id: Long) = Cedula(id)
+    fun registro(id: Long = 0, franquicia: String? = null) = Registro(id, franquicia)
+}
