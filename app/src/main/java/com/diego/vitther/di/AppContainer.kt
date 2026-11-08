@@ -5,7 +5,9 @@ import android.content.pm.ApplicationInfo
 import androidx.room.withTransaction
 import com.diego.vitther.data.local.SeedData
 import com.diego.vitther.data.local.VittherDatabase
+import com.diego.vitther.data.remote.api.VittherRemoteApiClient
 import com.diego.vitther.data.repository.CapsulaRepository
+import com.diego.vitther.data.repository.CatalogoRemotoRepository
 import com.diego.vitther.data.repository.PiezaRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,9 +23,11 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
     private val baseDatos = VittherDatabase.crear(appContext)
     private val alcance = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val remoteClient = VittherRemoteApiClient()
 
     val piezaRepository = PiezaRepository(baseDatos.piezaDao())
     val capsulaRepository = CapsulaRepository(baseDatos.capsulaDao())
+    val catalogoRemotoRepository = CatalogoRemotoRepository(remoteClient, remoteClient)
     val fotos = com.diego.vitther.data.media.FotoStore(appContext)
 
     init {
