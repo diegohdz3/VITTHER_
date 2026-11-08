@@ -8,7 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 
-/** Comprueba la promesa de la feature: la nota no existe en pantalla antes de revelar. */
+/** Comprueba la promesa de la feature: la nota no existe en pantalla antes de revelar en la pestaña Cápsulas. */
 class CapsulaFlowTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
@@ -28,7 +28,8 @@ class CapsulaFlowTest {
             compose.onNodeWithText("Colección").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithText(nombre).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText(nombre).performClick()
-            compose.waitUntil(15_000) { compose.onAllNodesWithText("Cápsulas de tiempo").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("Cápsulas").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Cápsulas").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithText("Revelar cápsula").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText(nota).assertDoesNotExist()
             compose.onNodeWithText("Revelar cápsula").performScrollTo().performClick()
