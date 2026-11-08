@@ -5,19 +5,20 @@ import com.diego.vitther.data.local.CapsulaEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import com.diego.vitther.domain.CapsulaVista
+import com.diego.vitther.domain.repository.CapsulaRepositoryContract
 import java.time.Clock
 
-class CapsulaRepository(private val dao: CapsulaDao, private val reloj: Clock = Clock.systemUTC()) {
+class CapsulaRepository(private val dao: CapsulaDao, private val reloj: Clock = Clock.systemUTC()) : CapsulaRepositoryContract {
 
-    fun observarPorPieza(piezaId: Long): Flow<List<CapsulaVista>> =
+    override fun observarPorPieza(piezaId: Long): Flow<List<CapsulaVista>> =
         dao.observarPorPieza(piezaId).map { lista -> lista.map { it.vista() } }
 
-    fun observarTodas(): Flow<List<CapsulaVista>> = dao.observarTodas().map { lista -> lista.map { it.vista() } }
+    override fun observarTodas(): Flow<List<CapsulaVista>> = dao.observarTodas().map { lista -> lista.map { it.vista() } }
 
     private fun CapsulaEntity.vista() = CapsulaVista(id, piezaId, titulo, fechaApertura, abiertaEn,
         nota.takeIf { abiertaEn != null })
 
-    suspend fun sellar(
+    override suspend fun sellar(
         piezaId: Long,
         titulo: String?,
         nota: String,
@@ -43,17 +44,17 @@ class CapsulaRepository(private val dao: CapsulaDao, private val reloj: Clock = 
      * La regla "no se puede leer antes de la fecha" se aplica aquí, no solo en
      * la UI: cualquier llamador futuro (notificación, widget) queda cubierto.
      */
-    suspend fun abrir(
+    override suspend fun abrir(
         id: Long
     ): Boolean {
         dao.marcarAbierta(id, reloj.millis())
         return dao.obtenerPorId(id)?.abiertaEn != null
     }
 
-    suspend fun marcarNotificada(id: Long) = dao.marcarNotificada(id)
+    override suspend fun marcarNotificada(id: Long) = dao.marcarNotificada(id)
 
-    suspend fun pendientesDeAviso(ahora: Long = System.currentTimeMillis()): List<CapsulaEntity> =
+    override suspend fun pendientesDeAviso(ahora: Long): List<CapsulaEntity> =
         dao.pendientesDeAviso(ahora)
 
-    suspend fun eliminar(capsula: CapsulaEntity) = dao.eliminar(capsula)
+    override suspend fun eliminar(capsula: CapsulaEntity) = dao.eliminar(capsula)
 }
