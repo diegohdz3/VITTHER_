@@ -1,112 +1,69 @@
-# VITTHER — Tu Museo Personal de Coleccionismo
+# VITTHER — *Tu museo, hoy.*
 
+**Desarrollado por:** Diego Cortés Hernández  
 **Materia:** Desarrollo de Aplicaciones Móviles  
-**Autor:** Diego Cortés Hernández  
-**Versión actual:** `26.1.1` (Esquema `AA.M.m`)  
-**Tecnologías:** Kotlin · Jetpack Compose (Material 3) · Arquitectura MVVM · Room · Coroutines & StateFlow · Firebase Realtime Database · Jikan REST API v4 · WorkManager
+**Versión actual:** `26.1.1`
 
 ---
 
-## 1. Descripción del Proyecto
+## ¿Qué es VITTHER?
 
-**VITTHER** es una aplicación nativa para Android diseñada como un **museo privado y curado de figuras de colección**. A diferencia de un inventario genérico, trata cada figura como una pieza de exhibición con su propia **Cédula**, **Estante por Franquicia**, **Cápsulas de Tiempo** (notas selladas que solo pueden revelarse cuando llega su fecha programada), **Línea de Tiempo Histórica** y lista de preventas/deseos (**Wishes**).
+**VITTHER** es una aplicación móvil concebida como un **museo privado y personal para coleccionistas de figuras**.
 
----
-
-## 2. Arquitectura MVVM y Estructura de Paquetes
-
-El proyecto implementa el patrón arquitectónico **Model–View–ViewModel (MVVM)** con flujo unidireccional de datos (**UDF**):
-
-```text
-UI (Jetpack Compose)  ── Eventos / Acciones ──▶  ViewModel (StateFlow / UiState)
-       ▲                                                  │
-       │                                                  ▼
- Estado Reactivo                               Domain UseCases / Contratos
-       │                                                  │
-       └──────────────  Repositories  ◀───────────────────┘
-                        ├── Local: Room (PiezaDao, CapsulaDao, WishDao) + FotoStore
-                        └── Remote: VittherRemoteApiClient (Jikan API + Firebase RTDB)
-```
-
-### Distribución de directorios (`com.diego.vitther`)
-
-| Paquete | Responsabilidad |
-| :--- | :--- |
-| `core/common` | Utilidades transversales y contenedor de estados de operación (`ResourceState`). |
-| `core/ui/theme` | Tokens de diseño y puente del sistema visual oscuro de museo (`VittherDesignSystem`). |
-| `data/local` | Base de datos local **Room** (`VittherDatabase`), entidades (`PiezaEntity`, `CapsulaEntity`, `WishEntity`), DAOs (`PiezaDao`, `CapsulaDao`, `WishDao`), `Converters` y datos semilla (`SeedData`). |
-| `data/media` | Almacenamiento privado de fotografías (`FotoStore`) dentro de `filesDir/fotos` con compresión JPEG y corrección EXIF. |
-| `data/notifications` | Programación y disparo de notificaciones de cápsulas de tiempo mediante **WorkManager** (`CapsulaWorker`, `CapsulaNotifier`). |
-| `data/remote/api` | Cliente HTTP y contratos de red (`VittherRemoteApiClient`, `CatalogoExternoApi`, `FirebaseMuseoApi`). |
-| `data/remote/dto` | Objetos de transferencia de datos serializables (`JikanCharacterDto`, `RespaldoFirebaseDto`, `PiezaCloudDto`, `CapsulaCloudDto`, `WishCloudDto`). |
-| `data/repository` | Implementación de repositorios (`PiezaRepository`, `CapsulaRepository`, `WishRepository`, `CatalogoRemotoRepository`). |
-| `di` | Contenedor de inyección manual de dependencias (`AppContainer`). |
-| `domain` | Reglas de negocio puras, validadores (`ValidacionPieza`), cálculo de fechas (`Fechas`), estados (`EstadoPieza`, `EstadoCapsula`, `EstadoWish`) e hitos (`Hito`). |
-| `domain/model` | Modelos de dominio (`ResumenMuseoModel`). |
-| `domain/repository` | Contratos de repositorios (`PiezaRepositoryContract`, `CapsulaRepositoryContract`, `WishRepositoryContract`). |
-| `domain/usecase` | Casos de uso (`ObtenerResumenMuseoUseCase`, `SincronizarMuseoUseCase`). |
-| `integration` | Integraciones nativas del dispositivo (`CamaraMediaIntegration`: Cámara con `FileProvider` y Galería con `PickVisualMedia`). |
-| `navigation` | Grafo de navegación tipado (`VittherNavHost`, `AppNavGraph`, `Routes`, `Destino`). |
-| `presentation/*` | ViewModels y contratos `UiState` por módulo (`inicio`, `coleccion`, `wishes`, `capsulas`, `historia`, `perfil`). |
-| `ui/screens/*` | Pantallas en Jetpack Compose (`HomeScreen`, `ColeccionScreen`, `WishesScreen`, `CedulaScreen`, `RegistroScreen`, `HistoriaScreen`, `ProfileScreen`) y componentes vectoriales (`VittherLogo`, `PiezaCarouselCard`, `VittherNavigationBar`). |
+Mientras la mayoría de las aplicaciones tratan una colección como una simple lista de compras o un inventario frío lleno de tablas, **VITTHER** nace de una idea distinta: cada figura tiene una historia, un lugar en tu vitrina y un significado personal. En lugar de registrar productos, en VITTHER **curas tu propio museo**.
 
 ---
 
-## 3. Consumo de API Externa y Backend en Firebase
+## ¿Cómo se desarrolló la experiencia?
 
-### A. API Externa de Catálogo de Figuras/Personajes (**Jikan REST API v4**)
-- **Endpoint:** `GET https://api.jikan.moe/v4/characters?q={consulta}&limit=5&order_by=favorites&sort=desc`
-- **Uso en la aplicación:** Al registrar o editar una pieza en **`RegistroScreen`**, el botón **`✦ Autocompletar desde catálogo online`** consulta en tiempo real la API externa y sugiere nombre oficial, franquicia, línea sugerida y reseña para autocompletar la cédula.
+El desarrollo de **VITTHER** se centró en trasladar la atmósfera de una galería de exhibición nocturna a la pantalla del teléfono:
 
-### B. Backend en la Nube (**Firebase Realtime Database REST API**)
-- **Base de datos activa:** `https://vitther-default-rtdb.firebaseio.com/`
-- **Nodo principal:** `/museos/default.json` (`PUT` y `GET`)
-- **Uso en la aplicación:**
-  - **Sincronización automática en segundo plano:** Cada alta, edición, movimiento a bodega o eliminación de piezas, cápsulas o wishes actualiza automáticamente el respaldo en Firebase Realtime Database.
-  - **Sincronización manual:** Desde **Perfil → Respaldo en la nube (`PLUS`)**, el coleccionista puede verificar o ejecutar manualmente el respaldo de sus 3 colecciones (`piezas`, `capsulas` y `wishes`).
+- **Estética de vitrina:** Fondo negro profundo, acentos en oro cálido (`#E8C97A`) y tipografía editorial serif que le da a cada figura el protagonismo de una pieza de museo.
+- **De la espera a la vitrina:** Acompaña al coleccionista en todo el ciclo de vida de una pieza: desde que es un deseo o una preventa en camino (**Wishes**), hasta que llega a casa, se fotografía, recibe su **Cédula de exhibición**, toma su lugar en los **estantes por franquicia** y guarda recuerdos hacia el futuro mediante **Cápsulas de Tiempo**.
+- **Privacidad y pertenencia:** El museo comienza completamente limpio de fábrica para que cada coleccionista construya su propio acervo desde cero, con la tranquilidad de poder ocultar los valores estimados de sus piezas cuando muestra su colección a otras personas.
 
 ---
 
-## 4. Recorrido Funcional de las Pantallas
+## Secciones Principales de la Aplicación
 
-1. **Inicio (`HomeScreen`):** Encabezado con insignia vectorial `VittherLogo` y lema *"Tu museo, hoy."*, carrusel 3D interactivo de piezas destacadas en exhibición, tira de métricas (`Piezas · Museo · Bodega · Franq.`), tarjeta de **Próxima cápsula** con anillo de progreso circular y sección **Un día como hoy**.
-2. **Colección con Estantes (`ColeccionScreen`):** Fusión de Colección y Categorías mediante **repisas horizontales por franquicia**, pestañas `Museo` | `Bodega`, buscador desplegable y vista de detalle por franquicia.
-3. **Wishes (`WishesScreen`):** Gestión de preventas **`Por llegar`** (con barra de progreso dorada y cuenta regresiva de arribo) y piezas **`Deseadas`** (con meta de ahorro en MXN). Incluye hoja de acciones para marcar **`"Ya llegó"`** (convirtiéndola automáticamente en pieza del Museo y abriendo su Cédula) o **`"Ya la compré"`**.
-4. **Cédula de Figura (`CedulaScreen`):** Fotografía Hero con botones flotantes translúcidos (`Volver`, `Editar`, `Más opciones ⋯`), chips de estado/edición limitada y 3 pestañas (`Cédula` con valor estimado ocultable, `Historia` con cita personal y `Cápsulas` para sellar o revelar cápsulas de tiempo).
-5. **Añadir / Editar Figura (`RegistroScreen`):** Flujo estructurado en 3 bloques (`1/3 ¿Qué pieza llegó?`, `2/3 Ubícala en tu museo`, `3/3 Cuenta su historia`) con captura de foto desde **Galería** o **Cámara**, autocompletado desde la API online y validaciones de dominio.
-6. **Historia (`HistoriaScreen`):** Línea de tiempo cronológica con filtros (`Todo`, `Piezas`, `Cápsulas`), sección **`PRÓXIMAMENTE`** (cápsulas por abrirse y llegadas de Wishes) y agrupación por año.
-7. **Perfil (`ProfileScreen`):** Identidad del museo, configuración de **Respaldo en la nube (`Firebase Realtime Database`)**, switches de avisos (`Cápsulas de tiempo`, `Llegadas de Wishes`) y privacidad (`Ocultar valor estimado`).
+### 1. Inicio — *Tu museo, hoy.*
+La entrada principal a tu galería. Presenta el emblema de **VITTHER** seguido de un **carrusel 3D interactivo** con las piezas destacadas que tienes actualmente en exhibición.Debajo del carrusel encontrarás:
+- **Resumen en vivo de tu museo:** Total de piezas, cuántas están en exhibición (*Museo*), cuántas en *Bodega* y cuántas *Franquicias* conforman tu colección.
+- **Próxima cápsula:** Un recordatorio visual con anillo de progreso que indica cuántos días faltan para que pueda abrirse tu siguiente cápsula de tiempo.
+- **Un día como hoy:** Destaca la historia personal y los días transcurridos desde que adquiriste una de tus piezas.
+
+### 2. Colección con Estantes (Repisas)
+El corazón del museo, accesible desde el emblema central de la barra inferior. Fusiona la vista de colección y categorías en **repisas horizontales organizadas por franquicia**:
+- **Pestañas Museo y Bodega:** Separa las figuras que tienes actualmente exhibidas en vitrina de aquellas que conservas resguardadas en caja o bodega.
+- **Repisas por franquicia:** Cada franquicia tiene su propio estante; al tocar el encabezado de una franquicia puedes ver el listado completo de figuras que pertenecen a ella.
+- **Buscador rápido:** Permite localizar cualquier pieza o franquicia al instante.
+
+### 3. Wishes — *Por llegar y Deseadas*
+El espacio dedicado a las próximas incorporaciones de tu museo:
+- **Por llegar:** Para figuras compradas en preventa o en tránsito, mostrando una barra de progreso dorada y los días restantes para su llegada. Cuando la figura llega a tus manos, basta con tocar **`"Ya llegó"`** para que pase automáticamente a formar parte de tu Museo.
+- **Deseadas:** Tu lista de deseos con la meta estimada en MXN para planear tus próximas adquisiciones y pasarlas a *Por llegar* con el botón **`"Ya la compré"`**.
+
+### 4. Cédula de la Pieza y Cápsulas de Tiempo
+Al tocar cualquier figura del museo se abre su **Cédula de exhibición**, con un vitral amplio para apreciar la fotografía completa de la pieza y tres pestañas:
+- **Cédula:** Fecha de adquisición, procedencia, ubicación física, serie/edición limitada y valor estimado (oculto por defecto tras `•••••• MXN` hasta que decidas mostrarlo).
+- **Historia:** La nota personal de lo que esa pieza significa para ti.
+- **Cápsulas:** Te permite escribir y **sellar una cápsula de tiempo** asociada a la figura eligiendo una fecha futura. La nota permanece bloqueada e ilegible hasta que llega el día programado, momento en que la aplicación te avisa que ya puedes revelarla.
+
+### 5. Añadir Figura
+Un recorrido guiado en **3 pasos sencillos** (`1/3 ¿Qué pieza llegó?`, `2/3 Ubícala en tu museo` y `3/3 Cuenta su historia`) que permite tomar una fotografía con la cámara o elegirla de la galería, autocompletar información desde el catálogo en línea y decidir si la pieza va directo a exhibición o a bodega.
+
+### 6. Historia
+Una línea de tiempo cronológica que narra la evolución de tu colección año por año: desde cuál fue **tu primera pieza**, pasando por cada adquisición y cápsula revelada, hasta la sección **Próximamente** con las preventas por llegar y las cápsulas próximas a abrirse.
+
+### 7. Perfil — *Mi museo*
+El panel personal del coleccionista donde puedes personalizar el nombre de tu museo, respaldar tu colección en la nube y configurar tus preferencias de avisos y privacidad.
 
 ---
 
-## 5. Estrategia de Ramas y Versionado en GitHub
+## Créditos y Autoría
 
-El repositorio cumple estrictamente con la política institucional de control de versiones:
-- **`main`:** Contiene **únicamente el cascarón del proyecto** (configuración Gradle, `AndroidManifest.xml`, recursos base y estructura de paquetes vacía con `.gitkeep`), sin código funcional `.kt`.
-- **`develop`:** Rama principal de integración donde convergen todas las funcionalidades mediante Pull Requests.
-- **`feature/*`:** Ramas modulares en minúsculas separadas por guiones desde las cuales se integran las funcionalidades hacia `develop`.
-- **Esquema de versión:** `26.1.1` (`AA.M.m` — Año `26`, versión mayor `1`, versión menor `1`), con Releases publicados desde la rama `develop`.
+- **Autor y Desarrollador:** Diego Cortés Hernández
+- **Proyecto Integrador:** Desarrollo de Aplicaciones Móviles
 
----
-
-## 6. Requisitos e Instrucciones de Ejecución
-
-1. **Requisitos previos:**
-   - Android Studio Ladybug / Meerkat o superior.
-   - JDK 11 o superior.
-   - Android SDK 36 (`minSdk = 26`, `targetSdk = 36`).
-2. **Clonar y abrir el proyecto:**
-   ```bash
-   git clone https://github.com/diegohdz3/VITTHER_.git
-   cd VITTHER_
-   git checkout develop
-   ```
-3. **Compilar y ejecutar pruebas unitarias por consola:**
-   ```bash
-   ./gradlew compileDebugKotlin testDebugUnitTest
-   ```
-4. **Generar archivo APK instalable:**
-   ```bash
-   ./gradlew assembleDebug
-   ```
-   El archivo APK se genera en `app/build/outputs/apk/debug/app-debug.apk`.
+> **Nota sobre la documentación técnica:**  
+> Esta rama (`main`) contiene la presentación general del proyecto y la estructura base del repositorio. Toda la **documentación técnica de ingeniería, arquitectura MVVM, consumo de APIs REST, base de datos en Firebase/Room e instrucciones de compilación** se encuentra detallada en el `README.md` de la rama **[`develop`](https://github.com/diegohdz3/VITTHER_/tree/develop)**.
