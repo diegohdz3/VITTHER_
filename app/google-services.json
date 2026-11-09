@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "3112254571",
+    "firebase_url": "https://vitther-default-rtdb.firebaseio.com",
+    "project_id": "vitther",
+    "storage_bucket": "vitther.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:3112254571:android:3e8884590151347ba2852e",
+        "android_client_info": {
+          "package_name": "com.diego.vitther"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNOZ4OhwzUbHua6CH7rBjme_eRYp8s1NI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
