@@ -81,7 +81,8 @@ fun VittherNavHost(
                             launchSingleTop = true
                             restoreState = true
                         }
-                    }
+                    },
+                    onAgregarPieza = { nav.navigate(Registro()) }
                 )
             }
             composable<Wishes> {
@@ -95,7 +96,8 @@ fun VittherNavHost(
                     piezas = piezas.orEmpty(),
                     vm = vm,
                     agregar = { nav.navigate(Registro()) },
-                    abrir = { nav.navigate(Cedula(it)) }
+                    abrir = { nav.navigate(Cedula(it)) },
+                    agregarEnSala = { franq -> nav.navigate(Registro(franquicia = franq)) }
                 )
             }
             composable<ColeccionCategoria> { entry ->
@@ -106,7 +108,8 @@ fun VittherNavHost(
                     agregar = { nav.navigate(Registro(franquicia = categoria)) },
                     abrir = { nav.navigate(Cedula(it)) },
                     categoria = categoria,
-                    volver = { nav.popBackStack() }
+                    volver = { nav.popBackStack() },
+                    agregarEnSala = { franq -> nav.navigate(Registro(franquicia = franq)) }
                 )
             }
             composable<Historia> {
@@ -137,6 +140,7 @@ fun VittherNavHost(
                 val id = entry.toRoute<Cedula>().id
                 if (piezas == null) CircularProgressIndicator() else CedulaScreen(
                     pieza = piezas?.find { it.id == id },
+                    todasLasPiezas = piezas.orEmpty(),
                     vm = vm,
                     ocupado = ocupado,
                     capsulas = capsulas.orEmpty().filter { it.piezaId == id },
@@ -157,6 +161,7 @@ fun VittherNavHost(
                 else if (id != 0L && pieza == null) EstadoVacio("Pieza no disponible", "Vuelve a tu colección.", "Volver", { nav.popBackStack() })
                 else RegistroScreen(
                     pieza = pieza,
+                    todasLasPiezas = piezas.orEmpty(),
                     vm = vm,
                     ocupado = ocupado,
                     franquiciaInicial = ruta.franquicia,
