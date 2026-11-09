@@ -15,12 +15,19 @@ import java.util.UUID
 class FotoStore(private val context: Context) {
     fun archivo(ruta: String?): File? = ruta?.let {
         val base = File(context.filesDir, "fotos").canonicalFile
-        File(context.filesDir, it).canonicalFile.takeIf { file -> file.parentFile == base }
+        File(context.filesDir, it).canonicalFile.takeIf { file -> file.parentFile == base && file.exists() }
     }
 
     suspend fun eliminar(ruta: String?) = withContext(Dispatchers.IO) {
         archivo(ruta)?.delete()
         Unit
+    }
+
+    suspend fun guardarBitmap(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
+        val carpeta = File(context.filesDir, "fotos").apply { mkdirs() }
+        val destino = File(carpeta, "${UUID.randomUUID()}.jpg")
+        destino.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) }
+        "fotos/${destino.name}"
     }
 
     suspend fun importar(uri: Uri): String = withContext(Dispatchers.IO) {
