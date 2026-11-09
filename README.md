@@ -1,129 +1,112 @@
-# VITTHER
+# VITTHER — Tu Museo Personal de Coleccionismo
 
-> Tu museo. Tus cápsulas. Tu historia.
-
-Aplicación Android para coleccionistas de figuras de acción, estatuas de anime y
-piezas de edición limitada. No es un inventario: es un **museo personal** donde
-cada pieza tiene su cédula, su lugar (exhibición o bodega) y, si el usuario
-quiere, una **cápsula de tiempo** que solo puede abrirse en una fecha futura.
-
-Proyecto individual · Diego Cortés Hernández (253420) · Desarrollo de
-Aplicaciones Móviles.
+**Materia:** Desarrollo de Aplicaciones Móviles  
+**Autor:** Diego Cortés Hernández  
+**Versión actual:** `26.1.1` (Esquema `AA.M.m`)  
+**Tecnologías:** Kotlin · Jetpack Compose (Material 3) · Arquitectura MVVM · Room · Coroutines & StateFlow · Firebase Realtime Database · Jikan REST API v4 · WorkManager
 
 ---
 
-## Estado
+## 1. Descripción del Proyecto
 
-**Semana 4 en curso — carrusel 3D de Inicio implementado.**
+**VITTHER** es una aplicación nativa para Android diseñada como un **museo privado y curado de figuras de colección**. A diferencia de un inventario genérico, trata cada figura como una pieza de exhibición con su propia **Cédula**, **Estante por Franquicia**, **Cápsulas de Tiempo** (notas selladas que solo pueden revelarse cuando llega su fecha programada), **Línea de Tiempo Histórica** y lista de preventas/deseos (**Wishes**).
 
-- [x] Tema oscuro museo (negro + dorado), tipografía serif embebida, esquema
-      Material 3 completo y splash de marca.
-- [x] Modelo de dominio y reglas de negocio puras (cápsulas, validación, fechas).
-- [x] Persistencia con Room: entidades, DAOs, repositorios.
-- [x] Inyección de dependencias manual (`AppContainer`).
-- [x] Datos de demostración solo en builds depurables.
-- [x] 23 pruebas unitarias (22 de dominio + 1 de ejemplo).
-- [x] Cinco destinos con navegación tipada y barra inferior con etiquetas.
-- [x] Colección: Museo/Bodega, búsqueda y cuadrícula adaptable.
-- [x] Registro con galería/cámara, copia privada de fotos, orientación EXIF y límite de 1280 px.
-- [x] Cédula: editar, mover, destacar y eliminar con confirmación.
-- [x] Cápsulas de tiempo: sellado, bloqueo de la nota antes de la fecha, revelación y aviso en Inicio.
-- [x] Notificaciones con WorkManager, permiso de Android 13+, canal y aviso único por cápsula.
-- [x] Historia derivada de adquisiciones, registros y cápsulas reveladas.
-- [x] Categorías conectadas a la colección filtrada.
-- [x] 8 pruebas instrumentadas: CRUD, persistencia, cápsulas, notificación y carrusel.
-- [x] Home con HorizontalPager 3D, flechas, indicadores, aviso de cápsula futura y estados vacío/carga/error.
-- [ ] Export/import y pulido final (semana 4).
+---
 
-## Stack
+## 2. Arquitectura MVVM y Estructura de Paquetes
 
-- Kotlin + Jetpack Compose (Material 3)
-- Room + KSP
-- MVVM con `StateFlow` y repositorios
-- AGP 9 · minSdk 26 · targetSdk 37
-- Sin backend: todo vive en el dispositivo (offline-first)
+El proyecto implementa el patrón arquitectónico **Model–View–ViewModel (MVVM)** con flujo unidireccional de datos (**UDF**):
 
-## Arquitectura
-
-```
-com.diego.vitther
-├── VittherApp.kt          Application + contenedor de dependencias
-├── MainActivity.kt        Edge-to-edge + splash + entrada a Compose
-├── di/                    AppContainer (DI manual)
-├── domain/                Reglas puras: fechas, estado de cápsula, validación, hitos
-├── data/
-│   ├── local/             Entidades, DAOs, base de datos Room y seed
-│   ├── media/             Importación y limpieza de fotos privadas
-│   ├── notifications/     Worker y programación de avisos
-│   └── repository/        PiezaRepository, CapsulaRepository (Flow)
-├── navigation/            Rutas tipadas y NavHost
-└── ui/
-    ├── theme/             Color, Theme, Type
-    ├── components/        Foto, emblemas y estados vacíos
-    └── screens/           coleccion/ e historia/
+```text
+UI (Jetpack Compose)  ── Eventos / Acciones ──▶  ViewModel (StateFlow / UiState)
+       ▲                                                  │
+       │                                                  ▼
+ Estado Reactivo                               Domain UseCases / Contratos
+       │                                                  │
+       └──────────────  Repositories  ◀───────────────────┘
+                        ├── Local: Room (PiezaDao, CapsulaDao, WishDao) + FotoStore
+                        └── Remote: VittherRemoteApiClient (Jikan API + Firebase RTDB)
 ```
 
-### Decisiones que vale la pena conocer
+### Distribución de directorios (`com.diego.vitther`)
 
-- **La foto se copia al almacenamiento privado** y se guarda una ruta relativa,
-  no la URI del selector de imágenes. Así no depende de permisos temporales
-  ni de que el usuario conserve el archivo original en la galería.
-- **Las fechas son `Long` en epoch millis**, normalizadas al inicio del día
-  local para adquisiciones; el selector Material usa UTC y se convierte por día
-  de calendario antes de guardar. Los instantes de registro conservan su hora.
-- **Los enums se guardan como texto**, no como ordinal: agregar estados en el
-  futuro no corrompe datos existentes.
-- **La regla de la cápsula vive en el repositorio**, no en la pantalla. Ninguna
-  vista futura (notificación, widget) puede saltarse el sellado.
-- **La nota de una cápsula no se cifra**, solo se oculta hasta su apertura. Por
-  eso el backup del sistema está desactivado: la base y las fotos no se envían
-  a la nube. El cifrado y la biometría quedan para una etapa posterior.
-- **Las notificaciones usan WorkManager horario**, no alarmas exactas: Android
-  puede retrasarlas por ahorro de batería. Cada cápsula avisa una sola vez.
-- **Al eliminar una pieza o reemplazar su foto se borra el archivo privado**;
-  también se limpian los temporales de cámara.
-- **Sin Hilt**: un `AppContainer` explícito es suficiente y mantiene el build
-  simple para un proyecto individual.
+| Paquete | Responsabilidad |
+| :--- | :--- |
+| `core/common` | Utilidades transversales y contenedor de estados de operación (`ResourceState`). |
+| `core/ui/theme` | Tokens de diseño y puente del sistema visual oscuro de museo (`VittherDesignSystem`). |
+| `data/local` | Base de datos local **Room** (`VittherDatabase`), entidades (`PiezaEntity`, `CapsulaEntity`, `WishEntity`), DAOs (`PiezaDao`, `CapsulaDao`, `WishDao`), `Converters` y datos semilla (`SeedData`). |
+| `data/media` | Almacenamiento privado de fotografías (`FotoStore`) dentro de `filesDir/fotos` con compresión JPEG y corrección EXIF. |
+| `data/notifications` | Programación y disparo de notificaciones de cápsulas de tiempo mediante **WorkManager** (`CapsulaWorker`, `CapsulaNotifier`). |
+| `data/remote/api` | Cliente HTTP y contratos de red (`VittherRemoteApiClient`, `CatalogoExternoApi`, `FirebaseMuseoApi`). |
+| `data/remote/dto` | Objetos de transferencia de datos serializables (`JikanCharacterDto`, `RespaldoFirebaseDto`, `PiezaCloudDto`, `CapsulaCloudDto`, `WishCloudDto`). |
+| `data/repository` | Implementación de repositorios (`PiezaRepository`, `CapsulaRepository`, `WishRepository`, `CatalogoRemotoRepository`). |
+| `di` | Contenedor de inyección manual de dependencias (`AppContainer`). |
+| `domain` | Reglas de negocio puras, validadores (`ValidacionPieza`), cálculo de fechas (`Fechas`), estados (`EstadoPieza`, `EstadoCapsula`, `EstadoWish`) e hitos (`Hito`). |
+| `domain/model` | Modelos de dominio (`ResumenMuseoModel`). |
+| `domain/repository` | Contratos de repositorios (`PiezaRepositoryContract`, `CapsulaRepositoryContract`, `WishRepositoryContract`). |
+| `domain/usecase` | Casos de uso (`ObtenerResumenMuseoUseCase`, `SincronizarMuseoUseCase`). |
+| `integration` | Integraciones nativas del dispositivo (`CamaraMediaIntegration`: Cámara con `FileProvider` y Galería con `PickVisualMedia`). |
+| `navigation` | Grafo de navegación tipado (`VittherNavHost`, `AppNavGraph`, `Routes`, `Destino`). |
+| `presentation/*` | ViewModels y contratos `UiState` por módulo (`inicio`, `coleccion`, `wishes`, `capsulas`, `historia`, `perfil`). |
+| `ui/screens/*` | Pantallas en Jetpack Compose (`HomeScreen`, `ColeccionScreen`, `WishesScreen`, `CedulaScreen`, `RegistroScreen`, `HistoriaScreen`, `ProfileScreen`) y componentes vectoriales (`VittherLogo`, `PiezaCarouselCard`, `VittherNavigationBar`). |
 
-## Compilar y probar
+---
 
-```bash
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
-./gradlew lintDebug
-# Con un emulador o teléfono conectado:
-./gradlew connectedDebugAndroidTest
-```
+## 3. Consumo de API Externa y Backend en Firebase
 
-Los datos de ejemplo se cargan una sola vez en builds depurables, dentro de una
-transacción. Vaciar la colección no vuelve a crearlos al reiniciar.
+### A. API Externa de Catálogo de Figuras/Personajes (**Jikan REST API v4**)
+- **Endpoint:** `GET https://api.jikan.moe/v4/characters?q={consulta}&limit=5&order_by=favorites&sort=desc`
+- **Uso en la aplicación:** Al registrar o editar una pieza en **`RegistroScreen`**, el botón **`✦ Autocompletar desde catálogo online`** consulta en tiempo real la API externa y sugiere nombre oficial, franquicia, línea sugerida y reseña para autocompletar la cédula.
 
-## Probar el recorrido
+### B. Backend en la Nube (**Firebase Realtime Database REST API**)
+- **Base de datos activa:** `https://vitther-default-rtdb.firebaseio.com/`
+- **Nodo principal:** `/museos/default.json` (`PUT` y `GET`)
+- **Uso en la aplicación:**
+  - **Sincronización automática en segundo plano:** Cada alta, edición, movimiento a bodega o eliminación de piezas, cápsulas o wishes actualiza automáticamente el respaldo en Firebase Realtime Database.
+  - **Sincronización manual:** Desde **Perfil → Respaldo en la nube (`PLUS`)**, el coleccionista puede verificar o ejecutar manualmente el respaldo de sus 3 colecciones (`piezas`, `capsulas` y `wishes`).
 
-1. Colección → Agregar pieza → elegir foto de Galería o Cámara.
-2. Escribir nombre y franquicia, revisar la fecha y guardar.
-3. Desde la cédula: editar nota/procedencia/ubicación, mover a bodega y destacar.
-4. Reiniciar la app: pieza y foto deben seguir disponibles.
-5. Cédula → Crear cápsula → escribir un mensaje y elegir una fecha futura.
-6. Salir y volver a entrar: la nota debe seguir oculta y la cápsula sellada.
-7. Cuando llegue la fecha, pulsar “Revelar cápsula”; la nota aparece y se añade
-   a Historia. La notificación se puede activar desde la cédula o Perfil.
-8. Categorías → abrir una franquicia; debe mostrar solo sus piezas.
-9. Eliminar una pieza y confirmar; también se eliminan sus cápsulas y su foto.
+---
 
-Inicio muestra un carrusel 3D y el aviso de la próxima cápsula futura;
-la exportación/importación y la búsqueda global siguen pendientes. La
-captura con una cámara física necesita validación en teléfono; los tests cubren
-importación y almacenamiento.
+## 4. Recorrido Funcional de las Pantallas
 
-## Probar el carrusel
+1. **Inicio (`HomeScreen`):** Encabezado con insignia vectorial `VittherLogo` y lema *"Tu museo, hoy."*, carrusel 3D interactivo de piezas destacadas en exhibición, tira de métricas (`Piezas · Museo · Bodega · Franq.`), tarjeta de **Próxima cápsula** con anillo de progreso circular y sección **Un día como hoy**.
+2. **Colección con Estantes (`ColeccionScreen`):** Fusión de Colección y Categorías mediante **repisas horizontales por franquicia**, pestañas `Museo` | `Bodega`, buscador desplegable y vista de detalle por franquicia.
+3. **Wishes (`WishesScreen`):** Gestión de preventas **`Por llegar`** (con barra de progreso dorada y cuenta regresiva de arribo) y piezas **`Deseadas`** (con meta de ahorro en MXN). Incluye hoja de acciones para marcar **`"Ya llegó"`** (convirtiéndola automáticamente en pieza del Museo y abriendo su Cédula) o **`"Ya la compré"`**.
+4. **Cédula de Figura (`CedulaScreen`):** Fotografía Hero con botones flotantes translúcidos (`Volver`, `Editar`, `Más opciones ⋯`), chips de estado/edición limitada y 3 pestañas (`Cédula` con valor estimado ocultable, `Historia` con cita personal y `Cápsulas` para sellar o revelar cápsulas de tiempo).
+5. **Añadir / Editar Figura (`RegistroScreen`):** Flujo estructurado en 3 bloques (`1/3 ¿Qué pieza llegó?`, `2/3 Ubícala en tu museo`, `3/3 Cuenta su historia`) con captura de foto desde **Galería** o **Cámara**, autocompletado desde la API online y validaciones de dominio.
+6. **Historia (`HistoriaScreen`):** Línea de tiempo cronológica con filtros (`Todo`, `Piezas`, `Cápsulas`), sección **`PRÓXIMAMENTE`** (cápsulas por abrirse y llegadas de Wishes) y agrupación por año.
+7. **Perfil (`ProfileScreen`):** Identidad del museo, configuración de **Respaldo en la nube (`Firebase Realtime Database`)**, switches de avisos (`Cápsulas de tiempo`, `Llegadas de Wishes`) y privacidad (`Ocultar valor estimado`).
 
-- Inicio: deslizar horizontalmente o usar las flechas. Tocar la tarjeta central abre su cédula.
-- Se usa `observarVitrina()`: destacadas en exhibición; si no hay destacadas, hasta seis exhibidas recientes.
-- Los puntos representan las piezas del carrusel, nunca las de Bodega.
-- Los ejemplos de `SeedData` no incluyen fotos: muestran el placeholder dorado. Agregar una foto desde la cédula permite comprobar la viñeta.
-- Mover todas las piezas a Bodega muestra “Tu vitrina está vacía”.
-- `HomeScreen.kt` incluye previews con datos y vacío; `HomeCarouselTest` verifica flechas, gesto, callback y eliminación de páginas durante la sesión.
+---
 
-Navigation 2.9.0 y Coil 3.2.0 se mantienen compatibles con Kotlin 2.2.10.
-Las versiones 2.10.2/3.6.3 probadas exigían metadatos Kotlin más recientes.
+## 5. Estrategia de Ramas y Versionado en GitHub
+
+El repositorio cumple estrictamente con la política institucional de control de versiones:
+- **`main`:** Contiene **únicamente el cascarón del proyecto** (configuración Gradle, `AndroidManifest.xml`, recursos base y estructura de paquetes vacía con `.gitkeep`), sin código funcional `.kt`.
+- **`develop`:** Rama principal de integración donde convergen todas las funcionalidades mediante Pull Requests.
+- **`feature/*`:** Ramas modulares en minúsculas separadas por guiones desde las cuales se integran las funcionalidades hacia `develop`.
+- **Esquema de versión:** `26.1.1` (`AA.M.m` — Año `26`, versión mayor `1`, versión menor `1`), con Releases publicados desde la rama `develop`.
+
+---
+
+## 6. Requisitos e Instrucciones de Ejecución
+
+1. **Requisitos previos:**
+   - Android Studio Ladybug / Meerkat o superior.
+   - JDK 11 o superior.
+   - Android SDK 36 (`minSdk = 26`, `targetSdk = 36`).
+2. **Clonar y abrir el proyecto:**
+   ```bash
+   git clone https://github.com/diegohdz3/VITTHER_.git
+   cd VITTHER_
+   git checkout develop
+   ```
+3. **Compilar y ejecutar pruebas unitarias por consola:**
+   ```bash
+   ./gradlew compileDebugKotlin testDebugUnitTest
+   ```
+4. **Generar archivo APK instalable:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+   El archivo APK se genera en `app/build/outputs/apk/debug/app-debug.apk`.
