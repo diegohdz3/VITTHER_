@@ -1,10 +1,14 @@
 package com.diego.vitther.data.remote.api
 
 import com.diego.vitther.data.local.PiezaEntity
+import com.diego.vitther.data.local.WishEntity
+import com.diego.vitther.data.remote.dto.CapsulaCloudDto
 import com.diego.vitther.data.remote.dto.JikanCharacterDto
 import com.diego.vitther.data.remote.dto.JikanCharacterSearchResponseDto
 import com.diego.vitther.data.remote.dto.PiezaCloudDto
 import com.diego.vitther.data.remote.dto.RespaldoFirebaseDto
+import com.diego.vitther.data.remote.dto.WishCloudDto
+import com.diego.vitther.domain.CapsulaVista
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -25,6 +29,7 @@ interface CatalogoExternoApi {
 
 interface FirebaseMuseoApi {
     suspend fun sincronizarRespaldo(respaldo: RespaldoFirebaseDto): Boolean
+    suspend fun obtenerRespaldo(): RespaldoFirebaseDto?
     suspend fun consultarEstadoConexion(): Boolean
 }
 
@@ -37,6 +42,9 @@ class VittherRemoteApiClient(
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
+
+    private val baseLimpia: String
+        get() = firebaseBaseUrl.trim().removeSuffix("/").removeSuffix("/museos/default.json").removeSuffix(".json")
 
     override suspend fun buscarPersonajesColeccionables(consulta: String): List<JikanCharacterDto> =
         withContext(Dispatchers.IO) {
@@ -64,7 +72,7 @@ class VittherRemoteApiClient(
 
     override suspend fun sincronizarRespaldo(respaldo: RespaldoFirebaseDto): Boolean =
         withContext(Dispatchers.IO) {
-            val endpoint = URL("$firebaseBaseUrl/museos/default.json")
+            val endpoint = URL("$baseLimpia/museos/default.json")
             val conn = (endpoint.openConnection() as HttpURLConnection).apply {
                 requestMethod = "PUT"
                 doOutput = true
@@ -78,6 +86,28 @@ class VittherRemoteApiClient(
                 conn.responseCode in 200..299
             } catch (_: Exception) {
                 false
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    override suspend fun obtenerRespaldo(): RespaldoFirebaseDto? =
+        withContext(Dispatchers.IO) {
+            val endpoint = URL("$baseLimpia/museos/default.json")
+            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 6_000
+                readTimeout = 6_000
+                setRequestProperty("Accept", "application/json")
+            }
+            try {
+                if (conn.responseCode in 200..299) {
+                    val cuerpo = conn.inputStream.bufferedReader().use(BufferedReader::readText)
+                    if (cuerpo.isBlank() || cuerpo.trim() == "null") null
+                    else json.decodeFromString<RespaldoFirebaseDto>(cuerpo)
+                } else null
+            } catch (_: Exception) {
+                null
             } finally {
                 conn.disconnect()
             }
@@ -117,4 +147,27 @@ fun PiezaEntity.toCloudDto(ahora: Long = System.currentTimeMillis()): PiezaCloud
         notaPersonal = notaPersonal,
         destacada = destacada,
         sincronizadoEn = ahora
+    )
+
+fun CapsulaVista.toCloudDto(): CapsulaCloudDto =
+    CapsulaCloudDto(
+        idLocal = id,
+        piezaId = piezaId,
+        titulo = titulo,
+        fechaApertura = fechaApertura,
+        abiertaEn = abiertaEn,
+        notaRevelada = nota
+    )
+
+fun WishEntity.toCloudDto(): WishCloudDto =
+    WishCloudDto(
+        idLocal = id,
+        nombre = nombre,
+        franquicia = franquicia,
+        linea = linea,
+        estado = estado.name,
+        metaPesos = metaPesos,
+        progresoPorcentaje = progresoPorcentaje,
+        fechaEstimadaLlegada = fechaEstimadaLlegada,
+        creadoEn = creadoEn
     )

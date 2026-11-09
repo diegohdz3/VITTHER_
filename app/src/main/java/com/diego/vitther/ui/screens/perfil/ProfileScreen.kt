@@ -1,11 +1,14 @@
 package com.diego.vitther.ui.screens.perfil
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -15,28 +18,33 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import com.diego.vitther.ui.components.VittherNavigationBar
-import com.diego.vitther.ui.screens.coleccion.AvisosCapsulas
+import com.diego.vitther.ui.screens.coleccion.ToggleMuseo
 import com.diego.vitther.ui.theme.VITTHERTheme
 import java.time.Instant
 import java.time.Period
 import java.time.ZoneId
 
-data class ProfileMenuEntry(val icon: ImageVector, val title: String, val onClick: () -> Unit)
-
-// Campos opcionales hasta que exista una fuente de datos de cuenta.
 data class ProfileIdentity(
     val nombre: String? = null,
     val foto: String? = null,
-    val registradoEn: Long? = null
+    val registradoEn: Long? = null,
+    val correo: String = "diego@correo.com"
 )
 
 @Composable
@@ -49,50 +57,251 @@ fun ProfileScreen(
     sincronizando: Boolean = false,
     onSincronizarFirebase: ((String?) -> Unit)? = null
 ) {
-    var opcion by rememberSaveable { mutableStateOf<String?>(null) }
+    var dialogoActivo by rememberSaveable { mutableStateOf<String?>(null) }
+    var nombreMuseo by rememberSaveable { mutableStateOf(identity.nombre?.takeIf { it.isNotBlank() } ?: "Mi museo") }
+    var correoCuenta by rememberSaveable { mutableStateOf(identity.correo) }
     var firebaseUrlInput by rememberSaveable {
         mutableStateOf("https://vitther-museo-default-rtdb.firebaseio.com")
     }
-    val items = listOf(
-        ProfileMenuEntry(Icons.Outlined.CloudUpload, "Respaldo en Firebase Realtime DB") { opcion = "Respaldo en Firebase Realtime DB" },
-        ProfileMenuEntry(Icons.Outlined.Person, "Cuenta") { opcion = "Cuenta" },
-        ProfileMenuEntry(Icons.Outlined.Notifications, "Notificaciones") { opcion = "Notificaciones" },
-        ProfileMenuEntry(Icons.Outlined.LightMode, "Apariencia") { opcion = "Apariencia" },
-        ProfileMenuEntry(Icons.Outlined.Lock, "Preferencias de cápsula del tiempo") { opcion = "Preferencias de cápsula del tiempo" },
-        ProfileMenuEntry(Icons.Outlined.HelpOutline, "Ayuda y soporte") { opcion = "Ayuda y soporte" },
-        ProfileMenuEntry(Icons.Outlined.Description, "Términos y privacidad") { opcion = "Términos y privacidad" }
-    )
+
+    var avisosCapsulas by rememberSaveable { mutableStateOf(true) }
+    var avisosWishes by rememberSaveable { mutableStateOf(true) }
+    var ocultarValor by rememberSaveable { mutableStateOf(true) }
+
     val zona = ZoneId.systemDefault()
     val registro = identity.registradoEn?.let { Instant.ofEpochMilli(it).atZone(zona).toLocalDate() }
     val hoy = Instant.ofEpochMilli(ahora).atZone(zona).toLocalDate()
-    val anios = registro?.takeUnless { it.isAfter(hoy) }?.let { Period.between(it, hoy).years }
-    val colors = MaterialTheme.colorScheme
-    Column(
-        Modifier.fillMaxSize()
-            .background(Brush.radialGradient(listOf(colors.primaryContainer.copy(alpha = .25f), colors.background)))
-            .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        ProfileHeader(identity, registro?.year)
-        Spacer(Modifier.height(30.dp))
-        ProfileStatsRow(totalPiezas, totalCategorias, anios)
-        Spacer(Modifier.height(26.dp))
-        ProfileMenuList(items)
-        Spacer(Modifier.height(20.dp))
-        Text("Tu colección se guarda localmente con Room y permite respaldo en Firebase.", style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+    val anios = (registro?.takeUnless { it.isAfter(hoy) }?.let { Period.between(it, hoy).years } ?: 1).coerceAtLeast(1)
+
+    val gold = MaterialTheme.colorScheme.primary
+
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp, vertical = 24.dp)
+        ) {
+            // Avatar centrado (84.dp) + insignia de edición + título "Mi museo"
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(84.dp)
+                        .clickable { dialogoActivo = "Cuenta" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFF2A2314), Color(0xFF0D0B07))
+                                )
+                            )
+                            .border(1.dp, gold, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (identity.foto == null) {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = "Avatar de perfil",
+                                tint = gold,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        } else {
+                            SubcomposeAsyncImage(
+                                model = identity.foto,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    // Botón circular dorado de editar en la esquina inferior derecha
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 2.dp, y = 2.dp)
+                            .size(26.dp)
+                            .background(gold, CircleShape)
+                            .border(2.dp, Color(0xFF0A0A0A), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Editar perfil",
+                            tint = Color(0xFF1A1405),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                Text(
+                    text = nombreMuseo,
+                    fontSize = 30.sp,
+                    fontFamily = FontFamily.Serif,
+                    color = gold,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // GRUPO 1: TU COLECCIÓN
+            SeccionGrupoPerfil("TU COLECCIÓN") {
+                FilaPerfilNavegacion(
+                    icono = {
+                        Icon(
+                            imageVector = Icons.Outlined.CloudUpload,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    },
+                    titulo = "Respaldo en la nube",
+                    insignia = "PLUS",
+                    subtitulo = estadoFirebase ?: "Última copia: hoy, 11:20",
+                    mostrarDivisor = true,
+                    onClick = { dialogoActivo = "Respaldo en la nube" }
+                )
+                FilaPerfilNavegacion(
+                    icono = {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    },
+                    titulo = "Cuenta",
+                    subtitulo = correoCuenta,
+                    mostrarDivisor = false,
+                    onClick = { dialogoActivo = "Cuenta" }
+                )
+            }
+
+            // GRUPO 2: AVISOS
+            SeccionGrupoPerfil("AVISOS") {
+                FilaPerfilSwitch(
+                    icono = { IconoRelojArenaPerfil(gold) },
+                    titulo = "Cápsulas de tiempo",
+                    subtitulo = "Cuando una cápsula esté por abrirse",
+                    activo = avisosCapsulas,
+                    mostrarDivisor = true,
+                    onToggle = { avisosCapsulas = !avisosCapsulas }
+                )
+                FilaPerfilSwitch(
+                    icono = {
+                        Icon(
+                            imageVector = Icons.Outlined.FavoriteBorder,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    },
+                    titulo = "Llegadas de Wishes",
+                    subtitulo = "Cuando una pieza esté por llegar",
+                    activo = avisosWishes,
+                    mostrarDivisor = false,
+                    onToggle = { avisosWishes = !avisosWishes }
+                )
+            }
+
+            // GRUPO 3: PRIVACIDAD
+            SeccionGrupoPerfil("PRIVACIDAD") {
+                FilaPerfilSwitch(
+                    icono = {
+                        Icon(
+                            imageVector = Icons.Outlined.VisibilityOff,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    },
+                    titulo = "Ocultar valor estimado",
+                    subtitulo = "Se muestra como •••••• hasta que lo pidas",
+                    activo = ocultarValor,
+                    mostrarDivisor = true,
+                    onToggle = { ocultarValor = !ocultarValor }
+                )
+                FilaPerfilNavegacion(
+                    icono = {
+                        Icon(
+                            imageVector = Icons.Outlined.HelpOutline,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    },
+                    titulo = "Ayuda y soporte",
+                    subtitulo = null,
+                    mostrarDivisor = false,
+                    onClick = { dialogoActivo = "Ayuda y soporte" }
+                )
+            }
+
+            // Pie de página con resumen del museo + enlaces legales
+            val piezasCount = totalPiezas ?: 0
+            val franqCount = totalCategorias ?: 0
+            val etiquetaAnios = if (anios == 1) "1 AÑO" else "$anios AÑOS"
+
+            Text(
+                text = "$piezasCount PIEZAS · $franqCount FRANQUICIAS · $etiquetaAnios",
+                fontSize = 11.sp,
+                letterSpacing = 1.4.sp,
+                color = Color(0xFF8D8777),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 30.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Términos",
+                    fontSize = 12.sp,
+                    color = Color(0xFF8D8777),
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .clickable { dialogoActivo = "Términos de uso" }
+                        .padding(horizontal = 6.dp)
+                )
+                Text("·", fontSize = 12.sp, color = Color(0xFF8D8777))
+                Text(
+                    text = "Privacidad",
+                    fontSize = 12.sp,
+                    color = Color(0xFF8D8777),
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .clickable { dialogoActivo = "Aviso de privacidad" }
+                        .padding(horizontal = 6.dp)
+                )
+            }
+        }
     }
-    opcion?.let { titulo ->
-        AlertDialog(onDismissRequest = { opcion = null }, title = { Text(titulo) },
+
+    dialogoActivo?.let { titulo ->
+        AlertDialog(
+            onDismissRequest = { dialogoActivo = null },
+            title = { Text(titulo, fontFamily = FontFamily.Serif) },
             text = {
                 when (titulo) {
-                    "Notificaciones", "Preferencias de cápsula del tiempo" -> {
-                        AvisosCapsulas()
-                    }
-                    "Respaldo en Firebase Realtime DB" -> {
+                    "Respaldo en la nube" -> {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(
-                                "Sincroniza las cédulas y metadatos de tu museo hacia tu nodo de Firebase Realtime Database mediante REST API.",
+                                "Sincroniza las cédulas, cápsulas y deseos de tu museo con Firebase Realtime Database.",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             OutlinedTextField(
@@ -108,104 +317,207 @@ fun ProfileScreen(
                             Button(
                                 enabled = !sincronizando && onSincronizarFirebase != null,
                                 onClick = { onSincronizarFirebase?.invoke(firebaseUrlInput) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = gold,
+                                    contentColor = Color(0xFF1A1405)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(if (sincronizando) "Sincronizando..." else "Sincronizar museo con Firebase")
                             }
                             estadoFirebase?.let { msg ->
-                                Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text(msg, style = MaterialTheme.typography.bodySmall, color = gold)
                             }
                         }
                     }
+                    "Cuenta" -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedTextField(
+                                value = nombreMuseo,
+                                onValueChange = { nombreMuseo = it },
+                                label = { Text("Nombre de tu museo") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = correoCuenta,
+                                onValueChange = { correoCuenta = it },
+                                label = { Text("Correo del coleccionista") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                    "Ayuda y soporte" -> {
+                        Text("VITTHER conserva tus piezas, cápsulas de tiempo y lista de deseos localmente con Room y permite respaldo en la nube mediante Firebase Realtime Database.")
+                    }
                     else -> {
-                        Text("Esta sección estará disponible próximamente.")
+                        Text("Tus fotografías y notas personales permanecen privadas dentro de tu museo VITTHER.")
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { opcion = null }) { Text("Cerrar") } })
+            confirmButton = {
+                TextButton(onClick = { dialogoActivo = null }) {
+                    Text("Listo", color = gold)
+                }
+            }
+        )
     }
 }
 
 @Composable
-fun ProfileHeader(identity: ProfileIdentity, anioRegistro: Int?) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        Box(Modifier.size(116.dp).border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
-            .padding(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surface),
-            contentAlignment = Alignment.Center) {
-            if (identity.foto == null) ProfileAvatarPlaceholder()
-            else SubcomposeAsyncImage(model = identity.foto, contentDescription = "Foto de perfil",
-                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
-                loading = { ProfileAvatarPlaceholder() }, error = { ProfileAvatarPlaceholder() })
+private fun SeccionGrupoPerfil(
+    etiqueta: String,
+    contenido: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 26.dp)
+    ) {
+        Text(
+            text = etiqueta,
+            fontSize = 11.sp,
+            letterSpacing = 1.2.sp,
+            color = Color(0xFF8D8777),
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        contenido()
+    }
+}
+
+@Composable
+private fun FilaPerfilNavegacion(
+    icono: @Composable () -> Unit,
+    titulo: String,
+    insignia: String? = null,
+    subtitulo: String? = null,
+    mostrarDivisor: Boolean,
+    onClick: () -> Unit
+) {
+    val gold = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            icono()
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = titulo,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (insignia != null) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = Color.Transparent,
+                            border = BorderStroke(1.dp, Color(0xFF5A4A22))
+                        ) {
+                            Text(
+                                text = insignia,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.8.sp,
+                                color = gold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                if (subtitulo != null) {
+                    Text(
+                        text = subtitulo,
+                        fontSize = 12.sp,
+                        color = Color(0xFF8D8777),
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFF8D8777),
+                modifier = Modifier.size(18.dp)
+            )
         }
-        Spacer(Modifier.height(20.dp))
-        Text(identity.nombre?.takeIf { it.isNotBlank() } ?: "Mi museo",
-            style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center)
-        Spacer(Modifier.height(8.dp))
-        Text(anioRegistro?.let { "COLECCIONISTA DESDE $it" } ?: "TU MUSEO PERSONAL",
-            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun ProfileAvatarPlaceholder() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Icon(Icons.Outlined.Person, "Sin foto de perfil", Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.secondary)
-    }
-}
-
-@Composable
-fun ProfileStatsRow(totalPiezas: Int?, totalCategorias: Int?, anios: Int?) {
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-        ProfileStat(totalPiezas?.toString() ?: "—", "PIEZAS TOTALES", Modifier.weight(1f))
-        VerticalDivider(Modifier.height(40.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .25f))
-        ProfileStat(totalCategorias?.toString() ?: "—", "CATEGORÍAS", Modifier.weight(1f))
-        VerticalDivider(Modifier.height(40.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .25f))
-        ProfileStat(anios?.toString() ?: "—", "DESDE QUE EMPEZASTE", Modifier.weight(1f),
-            anios?.let { if (it == 1) "AÑO" else "AÑOS" })
-    }
-}
-
-@Composable
-private fun ProfileStat(valor: String, etiqueta: String, modifier: Modifier, unidad: String? = null) {
-    Column(modifier.padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(valor, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-            unidad?.let { Text(it, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary) }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(etiqueta, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-fun ProfileMenuList(items: List<ProfileMenuEntry>) {
-    Column(Modifier.fillMaxWidth()) {
-        ProfileDivider()
-        items.forEach { item ->
-            ProfileMenuItem(item)
-            ProfileDivider()
+        if (mostrarDivisor) {
+            HorizontalDivider(color = Color(0xFF26231C), thickness = 1.dp)
         }
     }
 }
 
 @Composable
-private fun ProfileDivider() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = .2f), thickness = .5.dp)
+private fun FilaPerfilSwitch(
+    icono: @Composable () -> Unit,
+    titulo: String,
+    subtitulo: String,
+    activo: Boolean,
+    mostrarDivisor: Boolean,
+    onToggle: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            icono()
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = titulo,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = subtitulo,
+                    fontSize = 12.sp,
+                    color = Color(0xFF8D8777),
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+            }
+            ToggleMuseo(activo = activo, onClick = onToggle)
+        }
+        if (mostrarDivisor) {
+            HorizontalDivider(color = Color(0xFF26231C), thickness = 1.dp)
+        }
+    }
 }
 
 @Composable
-fun ProfileMenuItem(item: ProfileMenuEntry) {
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = item.onClick)
-        .heightIn(min = 56.dp).padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Icon(item.icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface)
-        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.secondary)
+private fun IconoRelojArenaPerfil(color: Color) {
+    Canvas(Modifier.size(21.dp)) {
+        val w = size.width
+        val h = size.height
+        val trazo = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawLine(color, Offset(w * 0.25f, h * 0.14f), Offset(w * 0.75f, h * 0.14f), trazo.width)
+        drawLine(color, Offset(w * 0.25f, h * 0.86f), Offset(w * 0.75f, h * 0.86f), trazo.width)
+        drawPath(
+            Path().apply {
+                moveTo(w * 0.30f, h * 0.14f)
+                lineTo(w * 0.70f, h * 0.86f)
+                moveTo(w * 0.70f, h * 0.14f)
+                lineTo(w * 0.30f, h * 0.86f)
+            },
+            color = color,
+            style = trazo
+        )
     }
 }
 
@@ -215,8 +527,15 @@ private fun ProfilePreview() {
     VITTHERTheme {
         Scaffold(bottomBar = { VittherNavigationBar(4) {} }) { padding ->
             Box(Modifier.padding(padding)) {
-                ProfileScreen(48, 8, Instant.parse("2025-10-27T12:00:00Z").toEpochMilli(),
-                    ProfileIdentity("Diego Cortés Hernández", registradoEn = Instant.parse("2024-01-01T12:00:00Z").toEpochMilli()))
+                ProfileScreen(
+                    totalPiezas = 11,
+                    totalCategorias = 7,
+                    ahora = Instant.parse("2026-11-08T12:00:00Z").toEpochMilli(),
+                    identity = ProfileIdentity(
+                        nombre = "Mi museo",
+                        registradoEn = Instant.parse("2025-09-09T12:00:00Z").toEpochMilli()
+                    )
+                )
             }
         }
     }

@@ -9,10 +9,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import java.io.File
@@ -23,32 +23,58 @@ fun Emblema(indice: Int, modifier: Modifier = Modifier) {
     Canvas(modifier.size(24.dp)) {
         val w = size.width
         val h = size.height
-        val trazo = Stroke(1.6.dp.toPx())
+        val trazo = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (indice) {
             0 -> drawPath(Path().apply {
                 moveTo(w * .12f, h * .45f); lineTo(w * .5f, h * .12f)
                 lineTo(w * .88f, h * .45f); lineTo(w * .88f, h * .88f)
                 lineTo(w * .12f, h * .88f); close()
             }, color, style = trazo)
-            1 -> for (x in listOf(.12f, .57f)) for (y in listOf(.12f, .57f)) {
-                drawRect(color, Offset(w*x, h*y), androidx.compose.ui.geometry.Size(w*.3f,h*.3f), style = trazo)
+            1 -> {
+                // Corazón para la sección Wishes (reemplaza Categorías)
+                drawPath(Path().apply {
+                    moveTo(w * 0.50f, h * 0.84f)
+                    cubicTo(
+                        w * 0.16f, h * 0.62f,
+                        w * 0.12f, h * 0.30f,
+                        w * 0.31f, h * 0.22f
+                    )
+                    cubicTo(
+                        w * 0.42f, h * 0.18f,
+                        w * 0.50f, h * 0.28f,
+                        w * 0.50f, h * 0.33f
+                    )
+                    cubicTo(
+                        w * 0.50f, h * 0.28f,
+                        w * 0.58f, h * 0.18f,
+                        w * 0.69f, h * 0.22f
+                    )
+                    cubicTo(
+                        w * 0.88f, h * 0.30f,
+                        w * 0.84f, h * 0.62f,
+                        w * 0.50f, h * 0.84f
+                    )
+                    close()
+                }, color, style = trazo)
             }
             2 -> {
                 drawPath(Path().apply {
-                    moveTo(w*.2f,h*.15f); lineTo(w*.5f,h*.72f); lineTo(w*.8f,h*.15f)
-                },color,style=trazo)
-                drawLine(color,Offset(w*.15f,h*.9f),Offset(w*.85f,h*.9f),trazo.width)
+                    moveTo(w * .2f, h * .15f); lineTo(w * .5f, h * .72f); lineTo(w * .8f, h * .15f)
+                }, color, style = trazo)
+                drawLine(color, Offset(w * .15f, h * .9f), Offset(w * .85f, h * .9f), trazo.width)
             }
             3 -> {
-                drawCircle(color,w*.38f,style=trazo)
+                drawCircle(color, w * .38f, style = trazo)
                 drawPath(Path().apply {
-                    moveTo(w*.5f,h*.25f); lineTo(w*.5f,h*.5f); lineTo(w*.7f,h*.6f)
-                },color,style=trazo)
+                    moveTo(w * .5f, h * .25f); lineTo(w * .5f, h * .5f); lineTo(w * .7f, h * .6f)
+                }, color, style = trazo)
             }
             else -> {
-                drawCircle(color,w*.18f,Offset(w*.5f,h*.3f),style=trazo)
-                drawArc(color,180f,180f,false,Offset(w*.16f,h*.55f),
-                    androidx.compose.ui.geometry.Size(w*.68f,h*.55f),style=trazo)
+                drawCircle(color, w * .18f, Offset(w * .5f, h * .3f), style = trazo)
+                drawArc(
+                    color, 180f, 180f, false, Offset(w * .16f, h * .55f),
+                    androidx.compose.ui.geometry.Size(w * .68f, h * .55f), style = trazo
+                )
             }
         }
     }
@@ -77,8 +103,11 @@ private fun PlaceholderFoto() {
 
 @Composable
 fun EstadoVacio(titulo: String, descripcion: String, accion: String? = null, onAccion: () -> Unit = {}) {
-    Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         Emblema(2)
         Text(titulo, style = MaterialTheme.typography.headlineSmall)
         Text(descripcion, color = MaterialTheme.colorScheme.onSurfaceVariant)

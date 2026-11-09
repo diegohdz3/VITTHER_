@@ -6,6 +6,7 @@ package com.diego.vitther.navigation
  */
 object Routes {
     val inicio = Inicio
+    val wishes = Wishes
     val categorias = Categorias
     val coleccion = Coleccion
     val historia = Historia
