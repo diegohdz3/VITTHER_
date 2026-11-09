@@ -23,7 +23,8 @@ data class PiezaHome(
     val foto: File? = null,
     val linea: String? = null,
     val edicionLimitada: Boolean = false,
-    val numeroEdicion: String? = null
+    val numeroEdicion: String? = null,
+    val ubicacion: String? = null
 )
 
 data class ProximaCapsulaHome(
@@ -68,7 +69,8 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
                 foto = container.fotos.archivo(it.fotoPath),
                 linea = it.linea,
                 edicionLimitada = it.edicionLimitada,
-                numeroEdicion = it.numeroEdicion
+                numeroEdicion = it.numeroEdicion,
+                ubicacion = it.ubicacion
             )
         }
     }.flowOn(Dispatchers.IO)
