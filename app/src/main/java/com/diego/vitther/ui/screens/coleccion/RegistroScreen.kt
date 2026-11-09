@@ -135,7 +135,8 @@ fun RegistroScreen(
                 nombre = nombre,
                 franquicia = franquicia,
                 fechaAdquisicion = fecha,
-                estado = estadoElegido
+                estado = estadoElegido,
+                destacada = enExhibicion
             )
             vm.guardar(
                 base.copy(

@@ -1,8 +1,6 @@
 package com.diego.vitther.di
 
 import android.content.Context
-import androidx.room.withTransaction
-import com.diego.vitther.data.local.SeedData
 import com.diego.vitther.data.local.VittherDatabase
 import com.diego.vitther.data.remote.api.VittherRemoteApiClient
 import com.diego.vitther.data.repository.CapsulaRepository
@@ -16,8 +14,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Inyección de dependencias manual. Para un proyecto individual esta es la
- * decisión correcta: una sola clase, sin KSP extra ni curva de Hilt.
+ * Inyección de dependencias manual.
+ * La aplicación inicia completamente limpia (de fábrica) sin datos precargados,
+ * lista para que el usuario registre su propia colección desde cero.
  */
 class AppContainer(context: Context) {
 
@@ -31,23 +30,6 @@ class AppContainer(context: Context) {
     val wishRepository = WishRepository(baseDatos.wishDao())
     val catalogoRemotoRepository = CatalogoRemotoRepository(remoteClient, remoteClient)
     val fotos = com.diego.vitther.data.media.FotoStore(appContext)
-
-    init {
-        alcance.launch {
-            val preferencias = appContext.getSharedPreferences("demo", Context.MODE_PRIVATE)
-            if (!preferencias.getBoolean("sembrado_v2", false)) {
-                baseDatos.withTransaction {
-                    SeedData.sembrarSiEstaVacio(
-                        baseDatos.piezaDao(),
-                        baseDatos.capsulaDao(),
-                        baseDatos.wishDao()
-                    )
-                }
-                preferencias.edit().putBoolean("sembrado_v2", true).apply()
-            }
-            sincronizarEnSegundoPlano()
-        }
-    }
 
     fun sincronizarEnSegundoPlano() {
         alcance.launch {
