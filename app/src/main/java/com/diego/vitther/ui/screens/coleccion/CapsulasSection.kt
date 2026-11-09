@@ -8,14 +8,27 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
@@ -28,8 +41,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-private val CapsuleSurface = Color(0xFF141414)
-private val CapsuleBorder = Color(0xFF26231C)
+private val CapsuleBorder = Color(0xFF3A3322)
 private val CapsuleGold = Color(0xFFE8C97A)
 private val CapsuleGoldDarkText = Color(0xFF1A1405)
 private val CapsuleGhostBorder = Color(0xFF5A4A22)
@@ -53,61 +65,125 @@ fun CapsulasSection(
     var mensaje by remember { mutableStateOf<String?>(null) }
     var confirmar by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Un mensaje para tu yo del futuro. Sellarlo es opcional.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = CapsuleMuted
-        )
+    Column(
+        modifier = Modifier.padding(top = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (capsulas.isEmpty() && !redactar) {
+            // Tarjeta curatorial cuando aún no hay cápsulas selladas
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(3.dp),
+                color = CapsuleGold.copy(alpha = 0.04f),
+                border = BorderStroke(1.dp, CapsuleBorder)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .border(1.dp, CapsuleGhostBorder, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IconoRelojArenaCapsula(color = CapsuleGold)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Sin cápsulas selladas",
+                            fontSize = 20.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFF2EAD8)
+                        )
+                        Text(
+                            text = "Guarda un mensaje para tu yo del futuro",
+                            fontSize = 12.sp,
+                            color = CapsuleMuted,
+                            fontWeight = FontWeight.Light
+                        )
+                    }
+                }
+            }
+        }
 
         capsulas.forEach { capsula ->
             val estado = estadoDeCapsula(capsula.abiertaEn, capsula.fechaApertura, ahora)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = CapsuleSurface,
+                shape = RoundedCornerShape(3.dp),
+                color = CapsuleGold.copy(alpha = 0.04f),
                 border = BorderStroke(1.dp, CapsuleBorder)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    val etiquetaEstado = when (estado) {
-                        is EstadoCapsula.Sellada -> "SELLADA"
-                        EstadoCapsula.Disponible -> "DISPONIBLE PARA REVELAR"
-                        EstadoCapsula.Abierta -> "REVELADA"
-                    }
-                    Text(
-                        text = etiquetaEstado,
-                        color = CapsuleGold,
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp)
-                    )
-                    Text(
-                        text = capsula.titulo ?: "Un recuerdo para el futuro",
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    when (estado) {
-                        is EstadoCapsula.Sellada -> {
-                            val dias = estado.diasRestantes
-                            val detalleDias = when {
-                                dias <= 0L -> "se abre hoy"
-                                dias == 1L -> "falta 1 día"
-                                else -> "faltan $dias días"
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .border(1.dp, CapsuleGhostBorder, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconoRelojArenaCapsula(color = CapsuleGold)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            val tituloMostrado = when (estado) {
+                                is EstadoCapsula.Sellada -> capsula.titulo?.takeIf { it.isNotBlank() } ?: "Cápsula sellada"
+                                EstadoCapsula.Disponible -> capsula.titulo?.takeIf { it.isNotBlank() } ?: "Lista para revelar"
+                                EstadoCapsula.Abierta -> capsula.titulo?.takeIf { it.isNotBlank() } ?: "Cápsula revelada"
                             }
                             Text(
-                                text = "Se revela el ${Fechas.formatearCorto(capsula.fechaApertura)} · $detalleDias",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = CapsuleMuted
+                                text = tituloMostrado,
+                                fontSize = 20.sp,
+                                fontFamily = FontFamily.Serif,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFFF2EAD8)
                             )
+                            when (estado) {
+                                is EstadoCapsula.Sellada -> {
+                                    val dias = estado.diasRestantes
+                                    val detalleDias = when {
+                                        dias <= 0L -> "Se abre hoy"
+                                        dias == 1L -> "Se abre en 1 día"
+                                        else -> "Se abre en $dias días"
+                                    }
+                                    Text(
+                                        text = "$detalleDias · ${Fechas.formatearCorto(capsula.fechaApertura)}",
+                                        fontSize = 12.sp,
+                                        color = CapsuleMuted,
+                                        fontWeight = FontWeight.Light
+                                    )
+                                }
+                                EstadoCapsula.Disponible -> {
+                                    Text(
+                                        text = "Disponible desde ${Fechas.formatearCorto(capsula.fechaApertura)}",
+                                        fontSize = 12.sp,
+                                        color = CapsuleGold,
+                                        fontWeight = FontWeight.Light
+                                    )
+                                }
+                                EstadoCapsula.Abierta -> {
+                                    Text(
+                                        text = "Abierta el ${Fechas.formatearCorto(capsula.abiertaEn ?: capsula.fechaApertura)}",
+                                        fontSize = 12.sp,
+                                        color = CapsuleMuted,
+                                        fontWeight = FontWeight.Light
+                                    )
+                                }
+                            }
                         }
+                    }
+
+                    when (estado) {
+                        is EstadoCapsula.Sellada -> Unit
                         EstadoCapsula.Disponible -> {
-                            Text(
-                                text = "Apertura disponible desde ${Fechas.formatearCorto(capsula.fechaApertura)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = CapsuleMuted
-                            )
-                            Spacer(Modifier.height(6.dp))
                             Button(
                                 enabled = !ocupado,
                                 onClick = { vm.abrirCapsula(capsula.id) },
@@ -127,7 +203,7 @@ fun CapsulasSection(
                             Text(
                                 text = capsula.nota.orEmpty(),
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onBackground
+                                color = Color(0xFFF2EAD8)
                             )
                         }
                     }
@@ -136,19 +212,22 @@ fun CapsulasSection(
         }
 
         if (!redactar) {
-            Button(
-                enabled = !ocupado,
-                onClick = { redactar = true; mensaje = null },
+            Surface(
+                onClick = { if (!ocupado) { redactar = true; mensaje = null } },
                 shape = RoundedCornerShape(99.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = CapsuleGold,
-                    contentColor = CapsuleGoldDarkText
-                ),
+                color = CapsuleGold.copy(alpha = 0.07f),
+                border = BorderStroke(1.dp, CapsuleGhostBorder),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                Text("Crear cápsula")
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Crear cápsula",
+                        fontSize = 14.sp,
+                        color = CapsuleGold
+                    )
+                }
             }
         } else {
             OutlinedTextField(
@@ -276,46 +355,84 @@ fun CapsulasSection(
 @Composable
 fun AvisosCapsulas() {
     val context = LocalContext.current
+    var avisosActivos by rememberSaveable { mutableStateOf(true) }
     var resultado by remember { mutableStateOf<String?>(null) }
     val permiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
+        avisosActivos = concedido
         resultado = if (concedido) "Avisos activados." else "Puedes consultar tus cápsulas en Inicio aunque no actives los avisos."
         if (concedido) revisarAvisos(context)
     }
-    OutlinedButton(
-        onClick = {
-            val manager = NotificationManagerCompat.from(context)
-            val canal = context.getSystemService(NotificationManager::class.java)
-                .getNotificationChannel(CANAL_CAPSULAS)
-            when {
-                canal?.importance == NotificationManager.IMPORTANCE_NONE -> {
-                    context.startActivity(
-                        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            .putExtra(Settings.EXTRA_CHANNEL_ID, CANAL_CAPSULAS)
-                    )
-                    resultado = "El canal de cápsulas está silenciado."
-                }
-                manager.areNotificationsEnabled() -> {
-                    revisarAvisos(context)
-                    resultado = "Avisos activados. Android puede retrasarlos por ahorro de batería."
-                }
-                Build.VERSION.SDK_INT >= 33 &&
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                    android.content.pm.PackageManager.PERMISSION_GRANTED ->
-                    permiso.launch(Manifest.permission.POST_NOTIFICATIONS)
-                else -> context.startActivity(
-                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+
+    val accionarToggle: () -> Unit = {
+        val manager = NotificationManagerCompat.from(context)
+        val canal = context.getSystemService(NotificationManager::class.java)
+            .getNotificationChannel(CANAL_CAPSULAS)
+        when {
+            canal?.importance == NotificationManager.IMPORTANCE_NONE -> {
+                context.startActivity(
+                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                         .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .putExtra(Settings.EXTRA_CHANNEL_ID, CANAL_CAPSULAS)
                 )
+                resultado = "El canal de cápsulas está silenciado."
             }
-        },
-        shape = RoundedCornerShape(99.dp),
-        border = BorderStroke(1.dp, CapsuleGhostBorder),
+            manager.areNotificationsEnabled() -> {
+                avisosActivos = !avisosActivos
+                if (avisosActivos) {
+                    revisarAvisos(context)
+                    resultado = "Avisos activados."
+                } else {
+                    resultado = "Avisos en pausa."
+                }
+            }
+            Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                permiso.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else -> context.startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            )
+        }
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .clickable(onClick = accionarToggle)
+            .padding(top = 8.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Activar avisos de cápsulas", color = CapsuleGold)
+        Text(
+            text = "Avisarme al abrirse",
+            fontSize = 14.5.sp,
+            color = Color(0xFFF2EAD8)
+        )
+        ToggleMuseo(
+            activo = avisosActivos,
+            onClick = accionarToggle
+        )
     }
     resultado?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = CapsuleMuted) }
+}
+
+@Composable
+private fun IconoRelojArenaCapsula(color: Color) {
+    Canvas(Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val s = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawLine(color, Offset(w * 0.24f, h * 0.14f), Offset(w * 0.76f, h * 0.14f), s.width)
+        drawLine(color, Offset(w * 0.24f, h * 0.86f), Offset(w * 0.76f, h * 0.86f), s.width)
+        val p = Path().apply {
+            moveTo(w * 0.28f, h * 0.14f)
+            cubicTo(w * 0.28f, h * 0.42f, w * 0.50f, h * 0.45f, w * 0.50f, h * 0.50f)
+            cubicTo(w * 0.50f, h * 0.55f, w * 0.28f, h * 0.58f, w * 0.28f, h * 0.86f)
+            moveTo(w * 0.72f, h * 0.14f)
+            cubicTo(w * 0.72f, h * 0.42f, w * 0.50f, h * 0.45f, w * 0.50f, h * 0.50f)
+            cubicTo(w * 0.50f, h * 0.55f, w * 0.72f, h * 0.58f, w * 0.72f, h * 0.86f)
+        }
+        drawPath(p, color, style = s)
+    }
 }
