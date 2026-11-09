@@ -15,8 +15,8 @@ android {
         applicationId = "com.diego.vitther"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "26.1.3"
+        versionCode = 4
+        versionName = "26.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

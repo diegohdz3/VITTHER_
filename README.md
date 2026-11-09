@@ -2,14 +2,16 @@
 
 **Materia:** Desarrollo de Aplicaciones Móviles  
 **Autor:** Diego Cortés Hernández  
-**Versión actual:** `26.1.3` (Esquema `AA.M.m`)  
+**Versión actual:** `26.2.0` (Esquema `AA.M.m`)  
 **Tecnologías:** Kotlin · Jetpack Compose (Material 3) · Arquitectura MVVM · Room · Coroutines & StateFlow · Firebase Realtime Database · Jikan REST API v4 · WorkManager
 
 ---
 
 ## 1. Descripción del Proyecto
 
-**VITTHER** es una aplicación nativa para Android diseñada como un **museo privado y curado de figuras de colección**. A diferencia de un inventario genérico, trata cada figura como una obra de exhibición con su propio **Nicho Arqueado**, **Salas de Museo Digitales por Franquicia**, **Bodega Subterránea tipo Cava de Vinos** con etiquetas de cosecha, **Escenario de Exhibición con Iluminación Cenital y Modo Contemplar**, **Cápsulas de Tiempo** (notas selladas que solo pueden revelarse cuando llega su fecha programada), **Línea de Tiempo Histórica** y lista de preventas/deseos (**Wishes**).
+**VITTHER** es una aplicación nativa para Android diseñada como un **museo privado y curado de figuras de colección**. A diferencia de un inventario genérico, trata cada figura como una obra de exhibición con su propio **Nicho Arqueado**, **Salas de Museo Digitales por Franquicia**, **Bodega Subterránea tipo Cava de Vinos** con etiquetas de cosecha, **Escenario de Exhibición con Iluminación Cenital y Modo Contemplar**, **Wishes con Escenario de Velo y Vitrinas Numeradas**, **Recorridos Guiados con Audioguía**, **Cápsulas de Tiempo** y **Retrato del Curador**.
+
+La aplicación se entrega **100 % limpia de fábrica** (sin datos precargados), lista para que cada coleccionista inaugure su propio museo desde cero.
 
 ---
 
@@ -34,7 +36,7 @@ UI (Jetpack Compose)  ── Eventos / Acciones ──▶  ViewModel (StateFlow 
 | :--- | :--- |
 | `core/common` | Utilidades transversales y contenedor de estados de operación (`ResourceState`). |
 | `core/ui/theme` | Tokens de diseño y puente del sistema visual oscuro de museo (`VittherDesignSystem`). |
-| `data/local` | Base de datos local **Room** (`VittherDatabase`), entidades (`PiezaEntity`, `CapsulaEntity`, `WishEntity`), DAOs (`PiezaDao`, `CapsulaDao`, `WishDao`), `Converters` y datos semilla (`SeedData`). |
+| `data/local` | Base de datos local **Room** (`VittherDatabase`), entidades (`PiezaEntity`, `CapsulaEntity`, `WishEntity`), DAOs (`PiezaDao`, `CapsulaDao`, `WishDao`), `Converters` y `SeedData` vacío de fábrica. |
 | `data/media` | Almacenamiento privado de fotografías (`FotoStore`) dentro de `filesDir/fotos` con compresión JPEG y corrección EXIF. |
 | `data/notifications` | Programación y disparo de notificaciones de cápsulas de tiempo mediante **WorkManager** (`CapsulaWorker`, `CapsulaNotifier`). |
 | `data/remote/api` | Cliente HTTP y contratos de red (`VittherRemoteApiClient`, `CatalogoExternoApi`, `FirebaseMuseoApi`). |
@@ -63,21 +65,26 @@ UI (Jetpack Compose)  ── Eventos / Acciones ──▶  ViewModel (StateFlow 
 - **Nodo principal:** `/museos/default.json` (`PUT` y `GET`)
 - **Uso en la aplicación:**
   - **Sincronización automática en segundo plano:** Cada alta, edición, movimiento a bodega o eliminación de piezas, cápsulas o wishes actualiza automáticamente el respaldo en Firebase Realtime Database.
-  - **Sincronización manual:** Desde **Perfil → Respaldo en la nube (`PLUS`)**, el coleccionista puede verificar o ejecutar manualmente el respaldo de sus 3 colecciones (`piezas`, `capsulas` y `wishes`).
+  - **Sincronización manual:** Desde **Perfil → Respaldo en la nube (`PLUS`)**, el coleccionista puede ejecutar manualmente el respaldo de sus 3 colecciones (`piezas`, `capsulas` y `wishes`).
 
 ---
 
-## 4. Recorrido Funcional de las Pantallas (`v26.1.3`)
+## 4. Recorrido Funcional de las Pantallas (`v26.2.0`)
 
 1. **Inicio · Inspiración Louvre (`HomeScreen`):** Encabezado con insignia vectorial `VittherLogo` y lema *"Tu museo, hoy."* sobre cielo nocturno parisino, **Pirámide de Cristal del Louvre** reticulada en segundo plano, carrusel de **nichos arqueados iluminados** (incluyendo el nicho punteado *"Un nicho te espera"*), **Cartela de Museo** con filetes dorados y puntos indicadores en forma de mini-nicho.
 2. **Colección: Salas de Museo y Bodega Cava de Vinos (`ColeccionScreen`):**
    - **Modo Museo:** Cada franquicia conforma una **Sala numerada (`SALA 01`, `SALA 02`...)** con iluminación cenital doble, cuadros con marcos dorados y biselados sobre la pared, piso de duela de madera y selector modal **"Cómo ver tus figuras"** (Distribución `Variadas` / `Verticales` / `Horizontales` y Tamaño `Pequeño` / `Mediano` / `Grande`).
    - **Modo Bodega (Cava de Vinos):** Atmósfera cálida subterránea con **Arco Principal de Cava** que exhibe la *"Última en entrar"* y **Racks de Madera (`RACK 01`, `RACK 02`...)** de 3 columnas con etiquetas colgantes de pergamino (`COSECHA <año>`).
-3. **Wishes (`WishesScreen`):** Gestión de preventas **`Por llegar`** (con barra de progreso dorada y cuenta regresiva de arribo) y piezas **`Deseadas`** (con meta de ahorro en MXN) con overlay radial de vitrina y conversión directa a pieza del museo (**`"Ya llegó"`**).
-4. **Añadir / Editar Pieza (`RegistroScreen`):** Experiencia curatorial de un solo paso con **Nicho Central de Museo**, hoja modal para elegir **Galería** o **Cámara**, cartela de nombre con metadato dinámico (`SALA XX · N.º YY`), chips horizontales de salas con opción **`+ Nueva sala`**, hoja modal **`Su historia`** y pantalla final de celebración mostrando la pieza recién colocada en la pared de su sala.
+3. **Wishes: Escenario de Velo y Vitrinas de Deseo (`WishesScreen`):**
+   - **Por llegar:** Escenario iluminado con la próxima figura cubierta por un **velo translúcido con estrella dorada pulsante** (que se levanta con animación al marcar **`"Ya llegó"`**), cuenta regresiva monumental en `DÍAS`, barra de progreso dorada y filas veladas para preventas adicionales.
+   - **Deseadas:** Destaca **`EL GRAN DESEO`** en el escenario iluminado con insignia de corazón dorado y silueta misteriosa, seguido por una cuadrícula de **vitrinas de cristal numeradas en números romanos (`II`, `III`, `IV`...)** sobre pedestales de museo y promoción de cualquier pieza a *"Hacer mi gran deseo"*.
+4. **Añadir / Editar Pieza (`RegistroScreen`):** Experiencia curatorial con **Nicho Central de Museo**, hoja modal para elegir **Galería** o **Cámara**, cartela de nombre con metadato dinámico (`SALA XX · N.º YY`), chips horizontales de salas con opción **`+ Nueva sala`**, hoja modal **`Su historia`** y pantalla final de celebración mostrando la pieza recién colocada en la pared de su sala.
 5. **Detalle de Figura y Modo Contemplar (`CedulaScreen`):** Escenario de museo con riel superior, **dos lámparas doradas con haces de luz cenitales**, partículas de polvo dorado flotando en la luz, marco central con modo inmersivo **`Contemplar`**, **Placa de Bronce superpuesta** (`SALA XX · N.º YY`), pestaña **Cédula**, pestaña **Historia** con comilla monumental `“` y pestaña **Cápsulas**.
-6. **Historia (`HistoriaScreen`):** Línea de tiempo cronológica con filtros (`Todo`, `Piezas`, `Cápsulas`), sección **`PRÓXIMAMENTE`** y agrupación por año.
-7. **Perfil (`ProfileScreen`):** Identidad del museo, configuración de **Respaldo en la nube (`Firebase Realtime Database`)**, switches de avisos y privacidad.
+6. **Historia: Mis Recorridos Guiados (`HistoriaScreen`):**
+   - **Boletería de Entrada:** Lista de boletos de museo con talón punteado, emblema vectorial (`star`, `heart`, `sword`, `crown`, `flame`, `moon`), mini-marcos superpuestos y boleto **`+ Nuevo recorrido`**.
+   - **Recorrido Guiado Interactivo:** 5 temas de iluminación (`oro`, `ambar`, `carmesi`, `esmeralda`, `noche`), **puertas dobles de museo animadas** por época o sala, **Audioguía** con efecto máquina de escribir y avance automático, y plano interactivo de salas con paradas.
+   - **Diseñador de Recorridos:** Vista previa en vivo del boleto, selector de emblema y tema, palabras del curador, ordenamiento (`Mi orden`, `Por años`, `Por salas`) y cuadrícula numerada de selección de piezas.
+7. **Perfil: Retrato del Curador (`ProfileScreen`):** Escenario iluminado con celosía del Louvre, **Retrato Enmarcado del Curador** (con marco elegible entre `Línea dorada` y `Vitrina` con pedestal, editable con foto de Galería o Cámara), nombre personalizable del museo, y 3 vitrinas con placas de bronce superpuestas (`TU COLECCIÓN`, `AVISOS`, `PRIVACIDAD`) sobre piso de parquet de museo.
 
 ---
 
@@ -87,7 +94,7 @@ El repositorio cumple estrictamente con la política institucional de control de
 - **`main`:** Contiene **únicamente el cascarón del proyecto** (configuración Gradle, `AndroidManifest.xml`, recursos base y estructura de paquetes vacía con `.gitkeep`), sin código funcional `.kt`, junto con el `README.md` de presentación general del producto.
 - **`develop`:** Rama principal de integración donde convergen todas las funcionalidades y la documentación técnica.
 - **`feature/*`:** Ramas modulares en minúsculas separadas por guiones desde las cuales se integran las funcionalidades hacia `develop`.
-- **Esquema de versión:** `26.1.3` (`AA.M.m` — Año `26`, versión mayor `1`, versión menor `3`), con Releases publicados desde la rama `develop`.
+- **Esquema de versión:** `26.2.0` (`AA.M.m` — Año `26`, versión mayor `2`, versión menor `0`), con Releases publicados desde la rama `develop`.
 
 ---
 
@@ -111,4 +118,4 @@ El repositorio cumple estrictamente con la política institucional de control de
    ```bash
    ./gradlew assembleDebug
    ```
-   El archivo APK se genera en `app/build/outputs/apk/debug/app-debug.apk`.
+   El archivo APK se genera en `app/build/outputs/apk/debug/app-debug.apk` (y copia lista como `VITTHER-v26.2.0.apk`).
