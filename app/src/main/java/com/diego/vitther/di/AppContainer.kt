@@ -1,7 +1,6 @@
 package com.diego.vitther.di
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import androidx.room.withTransaction
 import com.diego.vitther.data.local.SeedData
 import com.diego.vitther.data.local.VittherDatabase
@@ -34,22 +33,19 @@ class AppContainer(context: Context) {
     val fotos = com.diego.vitther.data.media.FotoStore(appContext)
 
     init {
-        val esDepurable = (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        if (esDepurable) {
-            alcance.launch {
-                val preferencias = appContext.getSharedPreferences("demo", Context.MODE_PRIVATE)
-                if (!preferencias.getBoolean("sembrado_v2", false)) {
-                    baseDatos.withTransaction {
-                        SeedData.sembrarSiEstaVacio(
-                            baseDatos.piezaDao(),
-                            baseDatos.capsulaDao(),
-                            baseDatos.wishDao()
-                        )
-                    }
-                    preferencias.edit().putBoolean("sembrado_v2", true).apply()
+        alcance.launch {
+            val preferencias = appContext.getSharedPreferences("demo", Context.MODE_PRIVATE)
+            if (!preferencias.getBoolean("sembrado_v2", false)) {
+                baseDatos.withTransaction {
+                    SeedData.sembrarSiEstaVacio(
+                        baseDatos.piezaDao(),
+                        baseDatos.capsulaDao(),
+                        baseDatos.wishDao()
+                    )
                 }
-                sincronizarEnSegundoPlano()
+                preferencias.edit().putBoolean("sembrado_v2", true).apply()
             }
+            sincronizarEnSegundoPlano()
         }
     }
 

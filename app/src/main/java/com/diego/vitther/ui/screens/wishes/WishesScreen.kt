@@ -47,6 +47,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.math.absoluteValue
 
 private val WishBg = Color(0xFF0A0A0A)
 private val WishSurface = Color(0xFF141414)
@@ -466,8 +467,7 @@ private fun TarjetaPorLlegar(wish: WishEntity, onClick: () -> Unit) {
             PlaceholderWishImagen(
                 nombre = wish.nombre,
                 ancho = 84.dp,
-                alto = 112.dp,
-                fontSize = 28.sp
+                alto = 112.dp
             )
             Column(
                 modifier = Modifier
@@ -549,8 +549,7 @@ private fun FilaDeseada(
             PlaceholderWishImagen(
                 nombre = wish.nombre,
                 ancho = 56.dp,
-                alto = 72.dp,
-                fontSize = 22.sp
+                alto = 72.dp
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -588,12 +587,16 @@ private fun FilaDeseada(
     }
 }
 
+/**
+ * Overlay armónico con foco radial de vitrina (estilo Griffith / Evangelion)
+ * aplicado de forma uniforme a TODAS las figuras de Wishes (tanto Por llegar como Deseadas,
+ * incluidas las nuevas que agregue el usuario) hasta que la pieza llegue al museo y se le tome fotografía.
+ */
 @Composable
 private fun PlaceholderWishImagen(
     nombre: String,
     ancho: Dp,
-    alto: Dp,
-    fontSize: androidx.compose.ui.unit.TextUnit
+    alto: Dp
 ) {
     val paleta = remember(nombre) { gradientePorNombre(nombre) }
     Box(
@@ -601,21 +604,22 @@ private fun PlaceholderWishImagen(
             .size(ancho, alto)
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (paleta != null) {
-                    Brush.radialGradient(colors = listOf(paleta.first, paleta.second))
-                } else {
-                    Brush.verticalGradient(colors = listOf(Color(0xFF17140E), Color(0xFF17140E)))
-                }
-            ),
+                Brush.radialGradient(
+                    colors = listOf(paleta.first, paleta.second, Color(0xFF0A0A0A))
+                )
+            )
+            .border(1.dp, WishBorder, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center
     ) {
-        if (paleta == null) {
-            Text(
-                text = nombre.firstOrNull()?.uppercase() ?: "V",
-                color = Color(0xFF3D3626),
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = fontSize)
-            )
-        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color(0x55000000))
+                    )
+                )
+        )
     }
 }
 
@@ -641,13 +645,26 @@ private fun ChevronDerechaWish() {
     }
 }
 
-private fun gradientePorNombre(nombre: String): Pair<Color, Color>? {
+private fun gradientePorNombre(nombre: String): Pair<Color, Color> {
     val n = nombre.lowercase()
     return when {
         "evangelion" in n -> Color(0xFF4A3A6A) to Color(0xFF14101C)
         "griffith" in n || "guts" in n -> Color(0xFF5A5A62) to Color(0xFF121214)
         "gojo" in n || "link" in n || "goku" in n -> Color(0xFF2A4A6A) to Color(0xFF0F1620)
-        else -> null
+        "kratos" in n -> Color(0xFF5E3A36) to Color(0xFF140D0C)
+        "zelda" in n -> Color(0xFF3E5648) to Color(0xFF0E1410)
+        else -> {
+            val paletasMuseo = listOf(
+                Color(0xFF5A5A62) to Color(0xFF121214),
+                Color(0xFF4A3A6A) to Color(0xFF14101C),
+                Color(0xFF2A4A6A) to Color(0xFF0F1620),
+                Color(0xFF564734) to Color(0xFF14110C),
+                Color(0xFF5E3A36) to Color(0xFF140D0C),
+                Color(0xFF3E5648) to Color(0xFF0E1410)
+            )
+            val idx = (nombre.hashCode().absoluteValue) % paletasMuseo.size
+            paletasMuseo[idx]
+        }
     }
 }
 
