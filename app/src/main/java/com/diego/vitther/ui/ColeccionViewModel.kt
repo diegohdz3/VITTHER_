@@ -117,26 +117,32 @@ class ColeccionViewModel(private val container: AppContainer) : ViewModel() {
         if (anterior?.fotoPath != null && anterior.fotoPath != pieza.fotoPath) {
             container.fotos.eliminar(anterior.fotoPath)
         }
+        container.sincronizarEnSegundoPlano()
         terminado(id)
     }
     fun eliminar(pieza: PiezaEntity, terminado: () -> Unit) = ejecutar {
         container.piezaRepository.eliminar(pieza)
         container.fotos.eliminar(pieza.fotoPath)
+        container.sincronizarEnSegundoPlano()
         terminado()
     }
     fun mover(pieza: PiezaEntity) = ejecutar {
         container.piezaRepository.moverA(pieza.id,
             if (pieza.estado == EstadoPieza.EXHIBICION) EstadoPieza.BODEGA else EstadoPieza.EXHIBICION)
+        container.sincronizarEnSegundoPlano()
     }
     fun destacar(pieza: PiezaEntity) = ejecutar {
         container.piezaRepository.destacar(pieza.id, !pieza.destacada)
+        container.sincronizarEnSegundoPlano()
     }
     fun sellar(piezaId: Long, titulo: String, nota: String, fecha: Long, terminado: () -> Unit) = ejecutar {
         container.capsulaRepository.sellar(piezaId, titulo, nota, fecha)
+        container.sincronizarEnSegundoPlano()
         terminado()
     }
     fun abrirCapsula(id: Long) = ejecutar {
         check(container.capsulaRepository.abrir(id)) { "Esta cápsula todavía no está disponible." }
+        container.sincronizarEnSegundoPlano()
     }
     companion object {
         val Factory = viewModelFactory {

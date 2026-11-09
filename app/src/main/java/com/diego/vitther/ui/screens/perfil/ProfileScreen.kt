@@ -61,7 +61,7 @@ fun ProfileScreen(
     var nombreMuseo by rememberSaveable { mutableStateOf(identity.nombre?.takeIf { it.isNotBlank() } ?: "Mi museo") }
     var correoCuenta by rememberSaveable { mutableStateOf(identity.correo) }
     var firebaseUrlInput by rememberSaveable {
-        mutableStateOf("https://vitther-museo-default-rtdb.firebaseio.com")
+        mutableStateOf("https://vitther-default-rtdb.firebaseio.com")
     }
 
     var avisosCapsulas by rememberSaveable { mutableStateOf(true) }

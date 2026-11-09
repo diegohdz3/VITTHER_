@@ -34,7 +34,7 @@ interface FirebaseMuseoApi {
 }
 
 class VittherRemoteApiClient(
-    private val firebaseBaseUrl: String = "https://vitther-museo-default-rtdb.firebaseio.com",
+    private val firebaseBaseUrl: String = "https://vitther-default-rtdb.firebaseio.com",
     private val jikanBaseUrl: String = "https://api.jikan.moe/v4"
 ) : CatalogoExternoApi, FirebaseMuseoApi {
 
