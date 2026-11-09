@@ -135,7 +135,8 @@ fun RegistroScreen(
                 nombre = nombre,
                 franquicia = franquicia,
                 fechaAdquisicion = fecha,
-                estado = estadoElegido
+                estado = estadoElegido,
+                destacada = enExhibicion
             )
             vm.guardar(
                 base.copy(
@@ -263,7 +264,7 @@ fun RegistroScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(190.dp)
+                    .height(if (archivoFoto != null) 320.dp else 190.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(
                         if (archivoFoto != null) {

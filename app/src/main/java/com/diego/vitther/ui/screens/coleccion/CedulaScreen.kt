@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.*
@@ -25,13 +26,18 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil3.compose.SubcomposeAsyncImage
 import com.diego.vitther.data.local.PiezaEntity
 import com.diego.vitther.domain.*
 import com.diego.vitther.ui.ColeccionViewModel
@@ -67,9 +73,12 @@ fun CedulaScreen(
     var tabSeleccionada by rememberSaveable(pieza.id) { mutableIntStateOf(0) }
     var mostrarValor by rememberSaveable(pieza.id) { mutableStateOf(false) }
     var mostrarSheet by rememberSaveable(pieza.id) { mutableStateOf(false) }
+    var mostrarFotoCompleta by rememberSaveable(pieza.id) { mutableStateOf(false) }
     var confirmarEliminar by remember { mutableStateOf(false) }
     val formatoMoneda = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-MX")) }
     val contexto = LocalContext.current
+    val archivoFoto = vm.archivo(pieza.fotoPath)
+    val paleta = rememberPaletaPieza(pieza.nombre)
 
     Box(
         modifier = Modifier
@@ -81,32 +90,52 @@ fun CedulaScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            // 1. HERO CON FOTO Y GRADIENTE INFERIOR
+            // 1. HERO AMPLIO (440.dp) PARA QUE LA FIGURA SE APRECIE COMPLETA DE PIES A CABEZA
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(290.dp)
+                    .height(440.dp)
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFF3A3222),
-                                Color(0xFF15120C),
+                                paleta.first,
+                                paleta.second,
                                 DarkBg
-                            )
+                            ),
+                            radius = 750f
                         )
-                    ),
+                    )
+                    .clickable(enabled = archivoFoto != null) { mostrarFotoCompleta = true },
                 contentAlignment = Alignment.Center
             ) {
-                FotoPieza(
-                    archivo = vm.archivo(pieza.fotoPath),
-                    nombre = pieza.nombre,
-                    modifier = Modifier.fillMaxSize()
-                )
-                // Gradiente inferior de 120.dp hacia el fondo oscuro (#0A0A0A)
+                if (archivoFoto != null) {
+                    // Fondo difuminado sutil + figura completa centrada (Fit) para no recortar cabeza ni base
+                    SubcomposeAsyncImage(
+                        model = archivoFoto,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.22f
+                    )
+                    SubcomposeAsyncImage(
+                        model = archivoFoto,
+                        contentDescription = "Foto de ${pieza.nombre}",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 24.dp, bottom = 28.dp, start = 12.dp, end = 12.dp),
+                        contentScale = ContentScale.Fit,
+                        loading = { PlaceholderHeroCedula(pieza.nombre) },
+                        error = { PlaceholderHeroCedula(pieza.nombre) }
+                    )
+                } else {
+                    PlaceholderHeroCedula(pieza.nombre)
+                }
+
+                // Gradiente inferior suave de 84.dp para fundirse con el título sin tapar la figura
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp)
+                        .height(84.dp)
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
@@ -116,11 +145,11 @@ fun CedulaScreen(
                 )
             }
 
-            // 2. CABECERA SUPERPUESTA (margin-top: -34dp simulado con offset)
+            // 2. CABECERA SUPERPUESTA
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = (-28).dp)
+                    .offset(y = (-16).dp)
                     .padding(horizontal = 20.dp)
             ) {
                 val subtituloFranquicia = buildString {
@@ -171,7 +200,7 @@ fun CedulaScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = (-12).dp)
+                    .offset(y = (-4).dp)
                     .padding(horizontal = 20.dp)
             ) {
                 Row(
@@ -220,7 +249,7 @@ fun CedulaScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .padding(top = 8.dp, bottom = 40.dp)
+                    .padding(top = 12.dp, bottom = 40.dp)
             ) {
                 when (tabSeleccionada) {
                     0 -> {
@@ -350,6 +379,46 @@ fun CedulaScreen(
         }
     }
 
+    // VISOR DE PANTALLA COMPLETA AL TOCAR LA FOTOGRAFÍA
+    if (mostrarFotoCompleta && archivoFoto != null) {
+        Dialog(
+            onDismissRequest = { mostrarFotoCompleta = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xF5050505))
+                    .clickable { mostrarFotoCompleta = false },
+                contentAlignment = Alignment.Center
+            ) {
+                SubcomposeAsyncImage(
+                    model = archivoFoto,
+                    contentDescription = pieza.nombre,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.88f)
+                        .padding(16.dp),
+                    contentScale = ContentScale.Fit
+                )
+                BotonFlotanteCircular(
+                    descripcion = "Cerrar vista completa",
+                    onClick = { mostrarFotoCompleta = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(20.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+
     // 6. BOTTOM SHEET DE OPCIONES (Mover a bodega, Destacar, Notificaciones, Eliminar)
     if (mostrarSheet) {
         ModalBottomSheet(
@@ -448,10 +517,32 @@ fun CedulaScreen(
 }
 
 @Composable
+private fun PlaceholderHeroCedula(nombre: String) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        val inicial = nombre.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "V"
+        Text(
+            text = inicial,
+            fontSize = 136.sp,
+            fontFamily = FontFamily.Serif,
+            color = Color(0x28F3EFE6)
+        )
+        Spacer(Modifier.height(8.dp))
+        CompositionLocalProvider(LocalContentColor provides GoldAccent.copy(alpha = 0.7f)) {
+            Emblema(2, Modifier.size(32.dp))
+        }
+    }
+}
+
+@Composable
 private fun BotonFlotanteCircular(
     descripcion: String,
     enabled: Boolean = true,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     contenido: @Composable () -> Unit
 ) {
     Surface(
@@ -459,7 +550,7 @@ private fun BotonFlotanteCircular(
         enabled = enabled,
         shape = CircleShape,
         color = Color(0x990A0A0A),
-        modifier = Modifier
+        modifier = modifier
             .size(40.dp)
             .semantics { contentDescription = descripcion }
     ) {
