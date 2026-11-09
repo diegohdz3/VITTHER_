@@ -32,7 +32,8 @@ data class WishesUiState(
 
 class WishesViewModel(
     private val wishRepository: WishRepository,
-    private val piezaRepository: PiezaRepository
+    private val piezaRepository: PiezaRepository,
+    private val onSyncFirebase: () -> Unit = {}
 ) : ViewModel() {
 
     private val toast = MutableStateFlow<String?>(null)
@@ -86,6 +87,7 @@ class WishesViewModel(
                     metaPesos = metaPesos
                 )
                 if (id == 0L) wishRepository.guardar(entidad) else wishRepository.actualizar(entidad)
+                onSyncFirebase()
                 toast.value = if (id == 0L) "${nombre.trim()} añadida a Wishes" else "Wish actualizado"
             }.onFailure {
                 error.value = it.message ?: "No se pudo guardar el wish."
@@ -97,6 +99,7 @@ class WishesViewModel(
         viewModelScope.launch {
             val fechaEstimada = Fechas.desdeFecha(LocalDate.now().plusDays(30))
             wishRepository.pasarAPorLlegar(wish, fechaEstimada)
+            onSyncFirebase()
             toast.value = "${wish.nombre} pasó a Por llegar"
         }
     }
@@ -114,6 +117,7 @@ class WishesViewModel(
             )
             val nuevoId = piezaRepository.guardar(nuevaPieza)
             wishRepository.eliminar(wish)
+            onSyncFirebase()
             toast.value = "✦ ${wish.nombre} ya está en tu museo. Completa su cédula."
             alIncorporar(nuevoId)
         }
@@ -122,6 +126,7 @@ class WishesViewModel(
     fun eliminarWish(wish: WishEntity) {
         viewModelScope.launch {
             wishRepository.eliminar(wish)
+            onSyncFirebase()
             toast.value = "Eliminada de Wishes"
         }
     }
@@ -132,7 +137,8 @@ class WishesViewModel(
                 val app = this[APPLICATION_KEY] as VittherApp
                 WishesViewModel(
                     wishRepository = app.container.wishRepository,
-                    piezaRepository = app.container.piezaRepository
+                    piezaRepository = app.container.piezaRepository,
+                    onSyncFirebase = { app.container.sincronizarEnSegundoPlano() }
                 )
             }
         }

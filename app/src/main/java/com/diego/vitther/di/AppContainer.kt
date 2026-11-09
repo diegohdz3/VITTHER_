@@ -13,6 +13,7 @@ import com.diego.vitther.data.repository.WishRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -47,6 +48,22 @@ class AppContainer(context: Context) {
                     }
                     preferencias.edit().putBoolean("sembrado_v2", true).apply()
                 }
+                sincronizarEnSegundoPlano()
+            }
+        }
+    }
+
+    fun sincronizarEnSegundoPlano() {
+        alcance.launch {
+            runCatching {
+                val piezasActuales = piezaRepository.observarTodas().first()
+                val capsulasActuales = capsulaRepository.observarTodas().first()
+                val wishesActuales = wishRepository.observarTodos().first()
+                catalogoRemotoRepository.respaldarEnFirebase(
+                    piezas = piezasActuales,
+                    capsulas = capsulasActuales,
+                    wishes = wishesActuales
+                )
             }
         }
     }
