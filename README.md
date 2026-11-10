@@ -3,7 +3,7 @@
 > *"Tu museo, hoy."*
 
 **Autor:** Diego Cortés Hernández  
-**Versión actual:** `26.2.0`  
+**Versión actual:** `26.2.1`  
 **Proyecto:** Desarrollo de Aplicaciones Móviles
 
 ---
