@@ -11,4 +11,4 @@ local.properties
 *.jks
 *.keystore
 *.hprof
-*.apk
+!VITTHER-v26.2.1.apk
