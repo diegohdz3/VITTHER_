@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Inyección de dependencias manual.
- * En ejecución local si la base de datos está vacía, se siembran datos de demostración
- * para generar las capturas de pantalla de evidencia para el reporte.
+ * La aplicación inicia completamente limpia (de fábrica) para la exposición y demostración
+ * en vivo de incorporación de piezas, deseos y recorridos desde cero.
  */
 class AppContainer(context: Context) {
 

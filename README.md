@@ -2,7 +2,7 @@
 
 **Materia:** Desarrollo de Aplicaciones Móviles  
 **Autor:** Diego Cortés Hernández  
-**Versión actual:** `26.2.0` (Esquema `AA.M.m`)  
+**Versión actual:** `26.2.1` (Esquema `AA.M.m`)  
 **Tecnologías:** Kotlin · Jetpack Compose (Material 3) · Arquitectura MVVM · Room · Coroutines & StateFlow · Firebase Realtime Database · Jikan REST API v4 · WorkManager
 
 ---
@@ -69,7 +69,7 @@ UI (Jetpack Compose)  ── Eventos / Acciones ──▶  ViewModel (StateFlow 
 
 ---
 
-## 4. Recorrido Funcional de las Pantallas (`v26.2.0`)
+## 4. Recorrido Funcional de las Pantallas (`v26.2.1`)
 
 1. **Inicio · Inspiración Louvre (`HomeScreen`):** Encabezado con insignia vectorial `VittherLogo` y lema *"Tu museo, hoy."* sobre cielo nocturno parisino, **Pirámide de Cristal del Louvre** reticulada en segundo plano, carrusel de **nichos arqueados iluminados** (incluyendo el nicho punteado *"Un nicho te espera"*), **Cartela de Museo** con filetes dorados y puntos indicadores en forma de mini-nicho.
 2. **Colección: Salas de Museo y Bodega Cava de Vinos (`ColeccionScreen`):**
@@ -94,7 +94,7 @@ El repositorio cumple estrictamente con la política institucional de control de
 - **`main`:** Contiene **únicamente el cascarón del proyecto** (configuración Gradle, `AndroidManifest.xml`, recursos base y estructura de paquetes vacía con `.gitkeep`), sin código funcional `.kt`, junto con el `README.md` de presentación general del producto.
 - **`develop`:** Rama principal de integración donde convergen todas las funcionalidades y la documentación técnica.
 - **`feature/*`:** Ramas modulares en minúsculas separadas por guiones desde las cuales se integran las funcionalidades hacia `develop`.
-- **Esquema de versión:** `26.2.0` (`AA.M.m` — Año `26`, versión mayor `2`, versión menor `0`), con Releases publicados desde la rama `develop`.
+- **Esquema de versión:** `26.2.1` (`AA.M.m` — Año `26`, versión mayor `2`, versión menor `1`), con Releases publicados desde la rama `develop`.
 
 ---
 
@@ -118,4 +118,4 @@ El repositorio cumple estrictamente con la política institucional de control de
    ```bash
    ./gradlew assembleDebug
    ```
-   El archivo APK se genera en `app/build/outputs/apk/debug/app-debug.apk` (y copia lista como `VITTHER-v26.2.0.apk`).
+   El archivo APK se genera en `app/build/outputs/apk/debug/app-debug.apk` (y copia lista como `VITTHER-v26.2.1.apk`).

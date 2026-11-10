@@ -619,9 +619,9 @@ fun ProfileScreen(
                 FilaVitrinaPerfil(
                     icono = Icons.AutoMirrored.Outlined.HelpOutline,
                     titulo = "Ayuda y soporte",
-                    subtitulo = "Guía del curador · v26.2.0",
+                    subtitulo = "Guía del curador · v26.2.1",
                     onClick = {
-                        toastMsg = "VITTHER v26.2.0 · Tu museo personal"
+                        toastMsg = "VITTHER v26.2.1 · Tu museo personal"
                     },
                     trailing = {
                         Icon(
