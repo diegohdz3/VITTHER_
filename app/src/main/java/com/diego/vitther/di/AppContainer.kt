@@ -1,6 +1,7 @@
 package com.diego.vitther.di
 
 import android.content.Context
+import com.diego.vitther.data.local.SeedData
 import com.diego.vitther.data.local.VittherDatabase
 import com.diego.vitther.data.remote.api.VittherRemoteApiClient
 import com.diego.vitther.data.repository.CapsulaRepository
@@ -15,8 +16,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Inyección de dependencias manual.
- * La aplicación inicia completamente limpia (de fábrica) sin datos precargados,
- * lista para que el usuario registre su propia colección desde cero.
+ * En ejecución local si la base de datos está vacía, se siembran datos de demostración
+ * para generar las capturas de pantalla de evidencia para el reporte.
  */
 class AppContainer(context: Context) {
 
@@ -30,6 +31,17 @@ class AppContainer(context: Context) {
     val wishRepository = WishRepository(baseDatos.wishDao())
     val catalogoRemotoRepository = CatalogoRemotoRepository(remoteClient, remoteClient)
     val fotos = com.diego.vitther.data.media.FotoStore(appContext)
+
+    init {
+        alcance.launch {
+            SeedData.sembrarSiEstaVacio(
+                piezaDao = baseDatos.piezaDao(),
+                capsulaDao = baseDatos.capsulaDao(),
+                wishDao = baseDatos.wishDao(),
+                context = appContext
+            )
+        }
+    }
 
     fun sincronizarEnSegundoPlano() {
         alcance.launch {

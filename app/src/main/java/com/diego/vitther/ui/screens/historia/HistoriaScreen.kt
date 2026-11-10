@@ -1,6 +1,8 @@
 package com.diego.vitther.ui.screens.historia
 
 import android.content.Context
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -644,6 +647,30 @@ private fun VistaRecorridoGuiado(
         todasLasPiezas.minByOrNull { it.fechaAdquisicion }?.id
     }
 
+    val contexto = LocalContext.current
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    var ttsListo by remember { mutableStateOf(false) }
+
+    DisposableEffect(contexto) {
+        var motor: TextToSpeech? = null
+        motor = TextToSpeech(contexto.applicationContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                motor?.let { m ->
+                    val resultado = m.setLanguage(Locale("es", "MX"))
+                    if (resultado == TextToSpeech.LANG_MISSING_DATA || resultado == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        m.setLanguage(Locale("es", "ES"))
+                    }
+                    ttsListo = true
+                }
+            }
+        }
+        tts = motor
+        onDispose {
+            motor?.stop()
+            motor?.shutdown()
+        }
+    }
+
     var grupoIdx by rememberSaveable(recorrido.id) { mutableIntStateOf(0) }
     var paradaIdx by rememberSaveable(recorrido.id) { mutableIntStateOf(-1) } // -1 = Puerta de época/sala
     var enFinal by rememberSaveable(recorrido.id) { mutableStateOf(false) }
@@ -680,6 +707,7 @@ private fun VistaRecorridoGuiado(
     }
 
     fun avanzar() {
+        tts?.stop()
         val g = grupoActual ?: return
         if (enFinal) return
         if (paradaIdx < 0) {
@@ -704,6 +732,7 @@ private fun VistaRecorridoGuiado(
     }
 
     fun retroceder() {
+        tts?.stop()
         if (enFinal) {
             enFinal = false
             grupoIdx = (grupos.size - 1).coerceAtLeast(0)
@@ -720,19 +749,39 @@ private fun VistaRecorridoGuiado(
         }
     }
 
-    // Efecto Audioguía (máquina de escribir + avance automático)
-    LaunchedEffect(audioguiaActiva, grupoIdx, paradaIdx, enFinal) {
-        if (!audioguiaActiva || enFinal) return@LaunchedEffect
+    // Efecto Audioguía (Voz TextToSpeech + máquina de escribir + avance automático)
+    LaunchedEffect(audioguiaActiva, grupoIdx, paradaIdx, enFinal, ttsListo) {
+        if (!audioguiaActiva || enFinal) {
+            tts?.stop()
+            return@LaunchedEffect
+        }
         if (paradaIdx < 0) {
-            delay(2200)
+            val textoPuerta = listOfNotNull(grupoActual?.titulo, grupoActual?.cita)
+                .filter { it.isNotBlank() }
+                .joinToString(". ")
+            if (textoPuerta.isNotBlank() && ttsListo) {
+                tts?.speak(textoPuerta, TextToSpeech.QUEUE_FLUSH, null, "guia_puerta")
+            }
+            delay(2600)
             if (audioguiaActiva) avanzar()
         } else {
+            val textoHablar = listOfNotNull(
+                piezaActual?.nombre,
+                piezaActual?.franquicia?.let { "Colección $it" },
+                textoGuiaCompleto,
+                piezaActual?.notaPersonal
+            ).filter { it.isNotBlank() }.joinToString(". ")
+
+            if (textoHablar.isNotBlank() && ttsListo) {
+                tts?.speak(textoHablar, TextToSpeech.QUEUE_FLUSH, null, "guia_pieza")
+            }
+
             textoGuiaVisible = ""
             for (i in 1..textoGuiaCompleto.length) {
                 textoGuiaVisible = textoGuiaCompleto.take(i)
                 delay(24)
             }
-            delay(2800)
+            delay(3200)
             if (audioguiaActiva) avanzar()
         }
     }
@@ -758,6 +807,7 @@ private fun VistaRecorridoGuiado(
                     .border(1.dp, Color(0xFF2B251B), CircleShape)
                     .clickable {
                         audioguiaActiva = false
+                        tts?.stop()
                         onSalir()
                     },
                 contentAlignment = Alignment.Center
@@ -796,6 +846,7 @@ private fun VistaRecorridoGuiado(
                     .clickable {
                         audioguiaActiva = !audioguiaActiva
                         if (!audioguiaActiva) {
+                            tts?.stop()
                             textoGuiaVisible = textoGuiaCompleto
                         }
                     },
