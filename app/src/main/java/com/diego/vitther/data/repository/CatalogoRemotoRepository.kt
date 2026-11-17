@@ -6,6 +6,7 @@ import com.diego.vitther.data.remote.api.CatalogoExternoApi
 import com.diego.vitther.data.remote.api.FirebaseMuseoApi
 import com.diego.vitther.data.remote.api.VittherRemoteApiClient
 import com.diego.vitther.data.remote.api.toCloudDto
+import com.diego.vitther.data.remote.dto.ColeccionCompartidaDto
 import com.diego.vitther.data.remote.dto.RespaldoFirebaseDto
 import com.diego.vitther.domain.CapsulaVista
 
@@ -57,25 +58,30 @@ class CatalogoRemotoRepository(
         piezas: List<PiezaEntity>,
         capsulas: List<CapsulaVista> = emptyList(),
         wishes: List<WishEntity> = emptyList(),
-        coleccionista: String = "Diego Cortés Hernández"
+        coleccionista: String = "Curador VITTHER",
+        fotosPiezas: Map<Long, String?> = emptyMap(),
+        fotosWishes: Map<Long, String?> = emptyMap(),
+        uid: String? = null,
+        nombreMuseo: String? = null
     ): ResultadoSincronizacionFirebase {
         val ahora = System.currentTimeMillis()
         val payload = RespaldoFirebaseDto(
             coleccionista = coleccionista,
-            versionApp = "26.1.1",
+            versionApp = "26.2.1",
             actualizadoEn = ahora,
             totalPiezas = piezas.size,
             totalCapsulas = capsulas.size,
             totalWishes = wishes.size,
-            piezas = piezas.map { it.toCloudDto(ahora) },
+            piezas = piezas.map { it.toCloudDto(ahora, fotosPiezas[it.id]) },
             capsulas = capsulas.map { it.toCloudDto() },
-            wishes = wishes.map { it.toCloudDto() }
+            wishes = wishes.map { it.toCloudDto(fotosWishes[it.id]) },
+            nombreMuseo = nombreMuseo
         )
-        val exitoRemoto = firebaseApi.sincronizarRespaldo(payload)
+        val exitoRemoto = firebaseApi.sincronizarRespaldoUsuario(uid, payload)
         val mensaje = if (exitoRemoto) {
             "Sincronización completada con Firebase (${piezas.size} piezas, ${capsulas.size} cápsulas y ${wishes.size} wishes)."
         } else {
-            "Instantánea lista (${piezas.size} piezas, ${capsulas.size} cápsulas, ${wishes.size} wishes). Ingresa la URL de tu Firebase Realtime DB en modo prueba."
+            "Instantánea lista (${piezas.size} piezas, ${capsulas.size} cápsulas, ${wishes.size} wishes). Revisa tu conexión a internet."
         }
         return ResultadoSincronizacionFirebase(
             sincronizadoRemoto = exitoRemoto,
@@ -85,6 +91,12 @@ class CatalogoRemotoRepository(
         )
     }
 
-    suspend fun obtenerRespaldoDeFirebase(): RespaldoFirebaseDto? =
-        firebaseApi.obtenerRespaldo()
+    suspend fun obtenerRespaldoDeFirebase(uid: String? = null): RespaldoFirebaseDto? =
+        firebaseApi.obtenerRespaldoUsuario(uid)
+
+    suspend fun publicarExposicionCompartida(expo: ColeccionCompartidaDto): Boolean =
+        firebaseApi.publicarExposicionCompartida(expo)
+
+    suspend fun obtenerExposicionCompartida(codigo: String): ColeccionCompartidaDto? =
+        firebaseApi.obtenerExposicionCompartida(codigo)
 }

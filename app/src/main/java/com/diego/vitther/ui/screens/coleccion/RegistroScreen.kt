@@ -5,10 +5,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -232,12 +241,28 @@ fun RegistroScreen(
         }
     }
 
-    // Paleta dinámica: Museo (#0B1224 -> #0A0A0A) vs Bodega/Cava (#27150A -> #0D0804)
-    val gold = if (enExhibicion) Color(0xFFE8C97A) else Color(0xFFE8B472)
-    val lineColor = if (enExhibicion) Color(0xFF26231C) else Color(0xFF33231A)
+    // Paleta dinámica animada: Museo (#0B1224 -> #0A0A0A) vs Bodega/Cava (#27150A -> #0D0804)
+    val gold by animateColorAsState(
+        targetValue = if (enExhibicion) Color(0xFFE8C97A) else Color(0xFFE8B472),
+        animationSpec = tween(durationMillis = 450),
+        label = "regGold"
+    )
+    val lineColor by animateColorAsState(
+        targetValue = if (enExhibicion) Color(0xFF26231C) else Color(0xFF33231A),
+        animationSpec = tween(durationMillis = 450),
+        label = "regLine"
+    )
     val muted = Color(0xFF8D8777)
-    val topBg = if (enExhibicion) Color(0xFF0B1224) else Color(0xFF27150A)
-    val botBg = if (enExhibicion) Color(0xFF0A0A0A) else Color(0xFF0D0804)
+    val topBg by animateColorAsState(
+        targetValue = if (enExhibicion) Color(0xFF0B1224) else Color(0xFF27150A),
+        animationSpec = tween(durationMillis = 450),
+        label = "regTopBg"
+    )
+    val botBg by animateColorAsState(
+        targetValue = if (enExhibicion) Color(0xFF0A0A0A) else Color(0xFF0D0804),
+        animationSpec = tween(durationMillis = 450),
+        label = "regBotBg"
+    )
 
     Box(
         modifier = Modifier
@@ -268,42 +293,56 @@ fun RegistroScreen(
             }
         }
 
-        if (idRecienCreado != null) {
-            // ==================== PANTALLA FINAL (#s2): CELEBRACIÓN EN SALA ====================
-            val piezasMismaSala = remember(todasLasPiezas, franquicia, idRecienCreado) {
-                todasLasPiezas.filter {
-                    it.franquicia.equals(franquicia.trim(), ignoreCase = true) && it.id != idRecienCreado
-                }.take(3)
-            }
-            PantallaCelebracionPieza(
-                nombrePieza = nombre.trim(),
-                franquicia = franquicia.trim(),
-                numeroSala = numeroSalaActual,
-                numeroGlobal = totalPiezasMuseo.coerceAtLeast(1),
-                enExhibicion = enExhibicion,
-                fotoNueva = vm.archivo(foto),
-                piezasExistentesSala = piezasMismaSala,
-                vm = vm,
-                gold = gold,
-                onAnadirOtra = {
-                    idRecienCreado = null
-                    nombre = ""
-                    foto = null
-                    linea = ""
-                    edicionLimitada = false
-                    numeroEdicion = ""
-                    procedencia = ""
-                    ubicacion = ""
-                    valorPesos = ""
-                    nota = ""
-                    enExhibicion = true
-                    validar = false
-                },
-                onVerEnMuseo = {
-                    guardado(idRecienCreado!!)
+        AnimatedContent(
+            targetState = idRecienCreado != null,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                if (targetState) {
+                    (fadeIn(tween(500)) + scaleIn(initialScale = 0.90f, animationSpec = tween(520, easing = FastOutSlowInEasing)))
+                        .togetherWith(fadeOut(tween(280)))
+                } else {
+                    fadeIn(tween(340)).togetherWith(fadeOut(tween(240)))
                 }
-            )
-        } else {
+            },
+            label = "transicionCelebracionRegistro"
+        ) { mostrarCelebracion ->
+            val idCreado = idRecienCreado
+            if (mostrarCelebracion && idCreado != null) {
+                // ==================== PANTALLA FINAL (#s2): CELEBRACIÓN EN SALA ====================
+                val piezasMismaSala = remember(todasLasPiezas, franquicia, idCreado) {
+                    todasLasPiezas.filter {
+                        it.franquicia.equals(franquicia.trim(), ignoreCase = true) && it.id != idCreado
+                    }.take(3)
+                }
+                PantallaCelebracionPieza(
+                    nombrePieza = nombre.trim(),
+                    franquicia = franquicia.trim(),
+                    numeroSala = numeroSalaActual,
+                    numeroGlobal = totalPiezasMuseo.coerceAtLeast(1),
+                    enExhibicion = enExhibicion,
+                    fotoNueva = vm.archivo(foto),
+                    piezasExistentesSala = piezasMismaSala,
+                    vm = vm,
+                    gold = gold,
+                    onAnadirOtra = {
+                        idRecienCreado = null
+                        nombre = ""
+                        foto = null
+                        linea = ""
+                        edicionLimitada = false
+                        numeroEdicion = ""
+                        procedencia = ""
+                        ubicacion = ""
+                        valorPesos = ""
+                        nota = ""
+                        enExhibicion = true
+                        validar = false
+                    },
+                    onVerEnMuseo = {
+                        guardado(idCreado)
+                    }
+                )
+            } else {
             // ==================== PASO ÚNICO (#s1): NICHO CENTRAL + CARTELA ====================
             Column(
                 modifier = Modifier
@@ -917,6 +956,7 @@ fun RegistroScreen(
                 )
             }
         }
+        }
     }
 
     // ==================== HOJA MODAL 1 (#shP): FOTO DE LA PIEZA ====================
@@ -1197,11 +1237,29 @@ private fun PantallaCelebracionPieza(
     onAnadirOtra: () -> Unit,
     onVerEnMuseo: () -> Unit
 ) {
-    val escalaNueva = remember { Animatable(1.45f) }
+    val escalaNueva = remember { Animatable(1.50f) }
+    val auraPulso = remember { Animatable(0f) }
+    val textoAnim = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         escalaNueva.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing)
+            animationSpec = spring(
+                dampingRatio = 0.56f,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+    }
+    LaunchedEffect(Unit) {
+        auraPulso.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 950, easing = FastOutSlowInEasing)
+        )
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(220)
+        textoAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing)
         )
     }
 
@@ -1282,21 +1340,40 @@ private fun PantallaCelebracionPieza(
                                     )
                                 }
                                 slotIdx == indiceNuevo -> {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .graphicsLayer {
-                                                scaleX = escalaNueva.value
-                                                scaleY = escalaNueva.value
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        // Onda expansiva de resplandor dorado detrás del marco nuevo
+                                        Canvas(Modifier.fillMaxSize()) {
+                                            val p = auraPulso.value
+                                            val alphaOnda = (1f - p) * 0.65f
+                                            if (alphaOnda > 0.01f) {
+                                                drawRoundRect(
+                                                    color = gold.copy(alpha = alphaOnda),
+                                                    topLeft = Offset(-p * 14.dp.toPx(), -p * 14.dp.toPx()),
+                                                    size = Size(
+                                                        size.width + p * 28.dp.toPx(),
+                                                        size.height + p * 28.dp.toPx()
+                                                    ),
+                                                    cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                                                    style = Stroke(width = (2.5f * (1f - p * 0.6f)).dp.toPx())
+                                                )
                                             }
-                                    ) {
-                                        MiniMarcoCelebracion(
-                                            nombre = nombrePieza,
-                                            archivoFoto = fotoNueva,
-                                            esBiselado = slotIdx % 2 == 1,
-                                            esNueva = true,
-                                            gold = gold
-                                        )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .graphicsLayer {
+                                                    scaleX = escalaNueva.value
+                                                    scaleY = escalaNueva.value
+                                                }
+                                        ) {
+                                            MiniMarcoCelebracion(
+                                                nombre = nombrePieza,
+                                                archivoFoto = fotoNueva,
+                                                esBiselado = slotIdx % 2 == 1,
+                                                esNueva = true,
+                                                gold = gold
+                                            )
+                                        }
                                     }
                                 }
                                 else -> {
@@ -1330,57 +1407,75 @@ private fun PantallaCelebracionPieza(
 
         Spacer(Modifier.height(22.dp))
 
-        // Título de confirmación (#okT y #okN)
-        Text(
-            text = if (enExhibicion) "Ya está en tu museo" else "Ya está a resguardo",
-            fontSize = 32.sp,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFFF2EAD8),
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = String.format(
-                Locale.forLanguageTag("es-MX"),
-                "%s · N.º %02d",
-                nombrePieza.uppercase(Locale.forLanguageTag("es-MX")),
-                numeroGlobal
-            ),
-            fontSize = 10.sp,
-            letterSpacing = 3.sp,
-            color = gold,
-            textAlign = TextAlign.Center
-        )
+        // Título de confirmación (#okT y #okN) con entrada escalonada
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.graphicsLayer {
+                alpha = textoAnim.value
+                translationY = (1f - textoAnim.value) * 28.dp.toPx()
+            }
+        ) {
+            Text(
+                text = if (enExhibicion) "Ya está en tu museo" else "Ya está a resguardo",
+                fontSize = 32.sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFFF2EAD8),
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = String.format(
+                    Locale.forLanguageTag("es-MX"),
+                    "%s · N.º %02d",
+                    nombrePieza.uppercase(Locale.forLanguageTag("es-MX")),
+                    numeroGlobal
+                ),
+                fontSize = 10.sp,
+                letterSpacing = 3.sp,
+                color = gold,
+                textAlign = TextAlign.Center
+            )
+        }
 
         Spacer(Modifier.weight(1f))
 
-        // Botones de acción finales (.acts)
-        Button(
-            onClick = onAnadirOtra,
-            shape = RoundedCornerShape(999.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = gold,
-                contentColor = Color(0xFF1A1405)
-            ),
+        // Botones de acción finales (.acts) con entrada suave
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .graphicsLayer {
+                    alpha = textoAnim.value
+                    translationY = (1f - textoAnim.value) * 36.dp.toPx()
+                },
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Añadir otra pieza", fontSize = 15.sp)
-        }
-        Spacer(Modifier.height(6.dp))
-        TextButton(
-            onClick = onVerEnMuseo,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(42.dp)
-        ) {
-            Text(
-                text = "Ver en mi museo",
-                fontSize = 13.sp,
-                color = Color(0xFF8D8777)
-            )
+            Button(
+                onClick = onAnadirOtra,
+                shape = RoundedCornerShape(999.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = gold,
+                    contentColor = Color(0xFF1A1405)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Text("Añadir otra pieza", fontSize = 15.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            TextButton(
+                onClick = onVerEnMuseo,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+            ) {
+                Text(
+                    text = "Ver en mi museo",
+                    fontSize = 13.sp,
+                    color = Color(0xFF8D8777)
+                )
+            }
         }
     }
 }
@@ -1466,23 +1561,40 @@ internal fun ToggleMuseo(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val bgColor by animateColorAsState(
+        targetValue = if (activo) Color(0xFF5A4A22) else Color(0xFF2A2820),
+        animationSpec = tween(durationMillis = 250),
+        label = "toggleBg"
+    )
+    val thumbColor by animateColorAsState(
+        targetValue = if (activo) Color(0xFFE8C97A) else Color(0xFF8D8777),
+        animationSpec = tween(durationMillis = 250),
+        label = "toggleThumbColor"
+    )
+    val thumbOffset by animateDpAsState(
+        targetValue = if (activo) 20.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "toggleOffset"
+    )
+
     Box(
         modifier = modifier
             .width(48.dp)
             .height(28.dp)
             .clip(RoundedCornerShape(999.dp))
-            .background(if (activo) Color(0xFF5A4A22) else Color(0xFF2A2820))
+            .background(bgColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp),
-        contentAlignment = if (activo) Alignment.CenterEnd else Alignment.CenterStart
+        contentAlignment = Alignment.CenterStart
     ) {
         Box(
             modifier = Modifier
+                .offset(x = thumbOffset)
                 .size(20.dp)
-                .background(
-                    if (activo) Color(0xFFE8C97A) else Color(0xFF8D8777),
-                    CircleShape
-                )
+                .background(thumbColor, CircleShape)
         )
     }
 }

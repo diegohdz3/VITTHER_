@@ -36,18 +36,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -81,7 +87,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil3.compose.SubcomposeAsyncImage
 import com.diego.vitther.VittherApp
+import com.diego.vitther.data.notifications.revisarAvisos
+import com.diego.vitther.ui.components.NotaCuratorialPrimerIngreso
+import com.diego.vitther.ui.components.reiniciarOnboardingModulos
 import com.diego.vitther.ui.screens.coleccion.ToggleMuseo
+import com.diego.vitther.ui.screens.coleccion.VisitarExposicionSheet
 import com.diego.vitther.ui.theme.AccentGold
 import com.diego.vitther.ui.theme.TextPrimary
 import com.diego.vitther.ui.theme.VitherSerif
@@ -102,6 +112,8 @@ private const val KEY_MARCO_CURADOR = "marco_curador" // "a" = Línea dorada, "b
 private const val KEY_AVISO_CAPSULAS = "aviso_capsulas"
 private const val KEY_AVISO_WISHES = "aviso_wishes"
 private const val KEY_OCULTAR_VALOR = "ocultar_valor"
+private const val KEY_URL_NUBE = "url_nube_firebase"
+private const val URL_NUBE_DEFAULT = "https://vitther-default-rtdb.firebaseio.com"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +124,11 @@ fun ProfileScreen(
     identity: ProfileIdentity = ProfileIdentity(),
     estadoFirebase: String? = null,
     sincronizando: Boolean = false,
-    onSincronizarFirebase: ((String?) -> Unit)? = null
+    onSincronizarFirebase: ((String?) -> Unit)? = null,
+    onRestaurarFirebase: ((String?) -> Unit)? = null,
+    onCompartirMuseo: (() -> Unit)? = null,
+    onAbrirExposicion: ((String) -> Unit)? = null,
+    onCerrarSesion: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -126,7 +142,7 @@ fun ProfileScreen(
     var nombreMuseo by rememberSaveable {
         mutableStateOf(
             prefs.getString(KEY_NOMBRE_MUSEO, null)
-                ?: identity.nombre?.takeIf { it.isNotBlank() }
+                ?: identity.nombre?.takeIf { it.isNotBlank() }?.let { "Museo de $it" }
                 ?: "Mi museo"
         )
     }
@@ -145,8 +161,15 @@ fun ProfileScreen(
     var ocultarValor by rememberSaveable {
         mutableStateOf(prefs.getBoolean(KEY_OCULTAR_VALOR, false))
     }
+    var urlNube by rememberSaveable {
+        mutableStateOf(prefs.getString(KEY_URL_NUBE, URL_NUBE_DEFAULT) ?: URL_NUBE_DEFAULT)
+    }
 
     var mostrarSheetCurador by rememberSaveable { mutableStateOf(false) }
+    var mostrarSheetNube by rememberSaveable { mutableStateOf(false) }
+    var mostrarSheetGuia by rememberSaveable { mutableStateOf(false) }
+    var mostrarSheetPrivacidad by rememberSaveable { mutableStateOf(false) }
+    var mostrarVisitarSheet by rememberSaveable { mutableStateOf(false) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(estadoFirebase) {
@@ -428,6 +451,17 @@ fun ProfileScreen(
                 )
             }
 
+            NotaCuratorialPrimerIngreso(
+                moduloKey = "perfil",
+                titulo = "Tu cuenta y nube personal",
+                descripcion = "Administra tu sesión de Google, respaldos y vitrinas compartidas:",
+                puntos = listOf(
+                    "Respaldo en la nube guarda tus figuras, deseos y fotos en tu cuenta de Google.",
+                    "Comparte tu museo virtual o visita el de un amigo en modo solo lectura.",
+                    "En Ayuda y soporte puedes reiniciar estas notas guía cuando quieras."
+                )
+            )
+
             // Sección 1: TU COLECCIÓN (.sec + .plq + .vt)
             VitrinaSeccionPerfil(tituloPlaca = "TU COLECCIÓN") {
                 val progresoBarra by animateFloatAsState(
@@ -442,7 +476,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = !sincronizando) {
-                                onSincronizarFirebase?.invoke("https://vitther-default-rtdb.firebaseio.com")
+                                mostrarSheetNube = true
                             }
                             .padding(horizontal = 16.dp, vertical = 15.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -480,14 +514,14 @@ fun ProfileScreen(
                                 text = when {
                                     sincronizando -> "Sincronizando tu colección…"
                                     !estadoFirebase.isNullOrBlank() -> estadoFirebase
-                                    else -> "Último: listo · $piezasCount ${if (piezasCount == 1) "pieza" else "piezas"}"
+                                    else -> "Toca para respaldar o restaurar · $piezasCount ${if (piezasCount == 1) "pieza" else "piezas"}"
                                 },
                                 color = Color(0xFF7A7267),
                                 fontSize = 11.sp
                             )
                         }
 
-                        // Botón circular dorado de subida (.go)
+                        // Botón circular dorado de subida rápida (.go)
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
@@ -499,7 +533,7 @@ fun ProfileScreen(
                                 )
                                 .border(1.dp, Color(0xFF5A4A28), CircleShape)
                                 .clickable(enabled = !sincronizando) {
-                                    onSincronizarFirebase?.invoke("https://vitther-default-rtdb.firebaseio.com")
+                                    onSincronizarFirebase?.invoke(urlNube.trim().ifBlank { URL_NUBE_DEFAULT })
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -534,8 +568,8 @@ fun ProfileScreen(
                 // Fila 2: Cuenta
                 FilaVitrinaPerfil(
                     icono = Icons.Outlined.PersonOutline,
-                    titulo = "Cuenta",
-                    subtitulo = "Curador · VITTHER Cloud",
+                    titulo = "Cuenta de Google",
+                    subtitulo = "${identity.nombre ?: "Curador"} · ${identity.correo}",
                     onClick = { mostrarSheetCurador = true },
                     trailing = {
                         Icon(
@@ -546,25 +580,80 @@ fun ProfileScreen(
                         )
                     }
                 )
+
+                if (onCompartirMuseo != null) {
+                    DivisorVitrinaPerfil()
+                    FilaVitrinaPerfil(
+                        icono = Icons.Outlined.Share,
+                        titulo = "Compartir museo virtual",
+                        subtitulo = "Generar link o código en solo lectura",
+                        onClick = { onCompartirMuseo.invoke() },
+                        trailing = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = Color(0xFF6B6358),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
+                }
+
+                if (onAbrirExposicion != null) {
+                    DivisorVitrinaPerfil()
+                    FilaVitrinaPerfil(
+                        icono = Icons.Outlined.TravelExplore,
+                        titulo = "Visitar colección de un amigo",
+                        subtitulo = "Ingresar link o código compartido",
+                        onClick = { mostrarVisitarSheet = true },
+                        trailing = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = Color(0xFF6B6358),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
+                }
             }
 
             // Sección 2: AVISOS (.sec + .plq + .vt)
+            val alternarAvisosCapsulas = {
+                avisosCapsulas = !avisosCapsulas
+                prefs.edit().putBoolean(KEY_AVISO_CAPSULAS, avisosCapsulas).apply()
+                context.getSharedPreferences("vitther", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("avisos", avisosCapsulas)
+                    .apply()
+                if (avisosCapsulas) {
+                    revisarAvisos(context)
+                    toastMsg = "Avisos de cápsulas activados"
+                } else {
+                    toastMsg = "Avisos de cápsulas en pausa"
+                }
+            }
+            val alternarAvisosWishes = {
+                avisosWishes = !avisosWishes
+                prefs.edit().putBoolean(KEY_AVISO_WISHES, avisosWishes).apply()
+                toastMsg = if (avisosWishes) "Recordatorios de wishes activos" else "Recordatorios de wishes en pausa"
+            }
+            val alternarOcultarValor = {
+                ocultarValor = !ocultarValor
+                prefs.edit().putBoolean(KEY_OCULTAR_VALOR, ocultarValor).apply()
+                toastMsg = if (ocultarValor) "Valores ocultos por defecto en fichas" else "Valores visibles en fichas"
+            }
+
             VitrinaSeccionPerfil(tituloPlaca = "AVISOS") {
                 FilaVitrinaPerfil(
                     icono = Icons.Outlined.AccessTime,
                     titulo = "Cápsulas de tiempo",
                     subtitulo = "Avisarme cuando se abran",
-                    onClick = {
-                        avisosCapsulas = !avisosCapsulas
-                        prefs.edit().putBoolean(KEY_AVISO_CAPSULAS, avisosCapsulas).apply()
-                    },
+                    onClick = alternarAvisosCapsulas,
                     trailing = {
                         ToggleMuseo(
                             activo = avisosCapsulas,
-                            onClick = {
-                                avisosCapsulas = !avisosCapsulas
-                                prefs.edit().putBoolean(KEY_AVISO_CAPSULAS, avisosCapsulas).apply()
-                            }
+                            onClick = alternarAvisosCapsulas
                         )
                     }
                 )
@@ -575,17 +664,11 @@ fun ProfileScreen(
                     icono = Icons.Outlined.AutoAwesome,
                     titulo = "Llegadas de Wishes",
                     subtitulo = "Recordar fechas estimadas",
-                    onClick = {
-                        avisosWishes = !avisosWishes
-                        prefs.edit().putBoolean(KEY_AVISO_WISHES, avisosWishes).apply()
-                    },
+                    onClick = alternarAvisosWishes,
                     trailing = {
                         ToggleMuseo(
                             activo = avisosWishes,
-                            onClick = {
-                                avisosWishes = !avisosWishes
-                                prefs.edit().putBoolean(KEY_AVISO_WISHES, avisosWishes).apply()
-                            }
+                            onClick = alternarAvisosWishes
                         )
                     }
                 )
@@ -597,19 +680,11 @@ fun ProfileScreen(
                     icono = Icons.Outlined.VisibilityOff,
                     titulo = "Ocultar valor estimado",
                     subtitulo = "Esconder montos en las fichas",
-                    onClick = {
-                        ocultarValor = !ocultarValor
-                        prefs.edit().putBoolean(KEY_OCULTAR_VALOR, ocultarValor).apply()
-                        toastMsg = if (ocultarValor) "Valores ocultos en fichas" else "Valores visibles en fichas"
-                    },
+                    onClick = alternarOcultarValor,
                     trailing = {
                         ToggleMuseo(
                             activo = ocultarValor,
-                            onClick = {
-                                ocultarValor = !ocultarValor
-                                prefs.edit().putBoolean(KEY_OCULTAR_VALOR, ocultarValor).apply()
-                                toastMsg = if (ocultarValor) "Valores ocultos en fichas" else "Valores visibles en fichas"
-                            }
+                            onClick = alternarOcultarValor
                         )
                     }
                 )
@@ -620,9 +695,7 @@ fun ProfileScreen(
                     icono = Icons.AutoMirrored.Outlined.HelpOutline,
                     titulo = "Ayuda y soporte",
                     subtitulo = "Guía del curador · v26.2.1",
-                    onClick = {
-                        toastMsg = "VITTHER v26.2.1 · Tu museo personal"
-                    },
+                    onClick = { mostrarSheetGuia = true },
                     trailing = {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
@@ -652,9 +725,7 @@ fun ProfileScreen(
                     text = "Términos · Privacidad",
                     color = Color(0xFF5A5348),
                     fontSize = 11.sp,
-                    modifier = Modifier.clickable {
-                        toastMsg = "VITTHER · Privacidad local y en tu nube"
-                    }
+                    modifier = Modifier.clickable { mostrarSheetPrivacidad = true }
                 )
             }
 
@@ -986,7 +1057,310 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Medium
                     )
                 }
+
+                if (onCerrarSesion != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0xFF171311))
+                            .border(1.dp, Color(0xFF4A2B2B), RoundedCornerShape(13.dp))
+                            .clickable {
+                                mostrarSheetCurador = false
+                                onCerrarSesion.invoke()
+                            }
+                            .padding(vertical = 13.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Logout,
+                            contentDescription = null,
+                            tint = Color(0xFFE07A6E),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Cambiar cuenta de Google / Cerrar sesión",
+                            color = Color(0xFFE07A6E),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
+        }
+    }
+
+    // Bottom sheet "VITTHER Cloud"
+    if (mostrarSheetNube) {
+        var urlTemp by rememberSaveable { mutableStateOf(urlNube) }
+        val piezasCount = totalPiezas ?: 0
+
+        ModalBottomSheet(
+            onDismissRequest = { mostrarSheetNube = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Color(0xFF13110D),
+            contentColor = TextPrimary
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 22.dp)
+                    .padding(bottom = 28.dp)
+            ) {
+                Text(
+                    text = "VITTHER CLOUD",
+                    color = AccentGold,
+                    fontSize = 10.sp,
+                    letterSpacing = 2.6.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Respaldo y restauración en la nube",
+                    color = TextPrimary,
+                    fontSize = 19.sp,
+                    fontFamily = VitherSerif
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = estadoFirebase?.takeIf { it.isNotBlank() }
+                        ?: "Colección actual: $piezasCount ${if (piezasCount == 1) "pieza" else "piezas"} listas para sincronizar con fotografías.",
+                    color = Color(0xFF8D8477),
+                    fontSize = 12.sp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "URL DE FIREBASE REALTIME DATABASE",
+                    color = Color(0xFF8D8477),
+                    fontSize = 9.5.sp,
+                    letterSpacing = 2.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = urlTemp,
+                    onValueChange = { urlTemp = it },
+                    singleLine = true,
+                    placeholder = {
+                        Text(URL_NUBE_DEFAULT, color = Color(0xFF5A5348), fontSize = 12.5.sp)
+                    },
+                    textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentGold,
+                        unfocusedBorderColor = Color(0xFF3A3120),
+                        cursorColor = AccentGold
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                val resolverUrlLista = {
+                    val limpia = urlTemp.trim().ifBlank { URL_NUBE_DEFAULT }
+                    urlNube = limpia
+                    prefs.edit().putString(KEY_URL_NUBE, limpia).apply()
+                    limpia
+                }
+
+                // Botón primario: Respaldar colección y fotos ahora
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFF282112), Color(0xFF1B160C)))
+                        )
+                        .border(1.dp, Color(0xFF6B5832), RoundedCornerShape(13.dp))
+                        .clickable(enabled = !sincronizando) {
+                            val urlLista = resolverUrlLista()
+                            mostrarSheetNube = false
+                            onSincronizarFirebase?.invoke(urlLista)
+                        }
+                        .padding(vertical = 14.dp, horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FileUpload,
+                        contentDescription = null,
+                        tint = AccentGold,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Respaldar colección y fotos ahora",
+                        color = AccentGold,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Botón secundario: Restaurar colección desde la nube
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(Color(0xFF17140F))
+                        .border(1.dp, Color(0xFF2E271A), RoundedCornerShape(13.dp))
+                        .clickable(enabled = !sincronizando) {
+                            val urlLista = resolverUrlLista()
+                            mostrarSheetNube = false
+                            onRestaurarFirebase?.invoke(urlLista)
+                        }
+                        .padding(vertical = 14.dp, horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudDownload,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Restaurar colección desde la nube",
+                        color = TextPrimary,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+
+    // Bottom sheet "Guía del curador"
+    if (mostrarSheetGuia) {
+        SheetInformativoPerfil(
+            etiqueta = "GUÍA DEL CURADOR · v26.2.1",
+            titulo = "Los 5 pabellones de VITTHER",
+            bloques = listOf(
+                "Inicio Louvre 3D" to "Carrusel de piezas destacadas con iluminación nocturna. Desliza las vitrinas o toca cualquier nicho para abrir su Cédula.",
+                "Cédulas, Zoom y PDF" to "Visualiza cada figura en alta resolución con zoom táctil (Modo Contemplar), escucha su historia narrada o expórtala en PDF oficial.",
+                "Salas Compartibles" to "Comparte tu colección completa o una sala específica (Naruto, Star Wars, etc.) mediante código o link de solo lectura.",
+                "Cápsulas del Tiempo" to "Sella notas para el futuro en cada pieza. Al cumplirse la fecha recibirás un aviso automático mediante WorkManager.",
+                "Historia y Audioguía" to "Recorre tus piezas por épocas o franquicias con reproductor automático de voz (Text-to-Speech).",
+                "Cuenta Google y VITTHER Cloud" to "Respalda tu colección completa con fotografías en la nube vinculada a tu cuenta y restáurala en cualquier dispositivo."
+            ),
+            accionExtra = {
+                Spacer(modifier = Modifier.height(14.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFF282112), Color(0xFF1B160C)))
+                        )
+                        .border(1.dp, Color(0xFF6B5832), RoundedCornerShape(12.dp))
+                        .clickable {
+                            reiniciarOnboardingModulos(context)
+                            mostrarSheetGuia = false
+                            toastMsg = "Guías de primer ingreso reactivadas en todos los módulos"
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Volver a ver notas guía en los módulos",
+                        color = AccentGold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            },
+            onDismiss = { mostrarSheetGuia = false }
+        )
+    }
+
+    // Bottom sheet "Términos · Privacidad"
+    if (mostrarSheetPrivacidad) {
+        SheetInformativoPerfil(
+            etiqueta = "ARQUITECTURA DE PRIVACIDAD",
+            titulo = "Términos y resguardo local",
+            bloques = listOf(
+                "Almacenamiento privado" to "Todas tus fotografías y base de datos SQLite/Room residen exclusivamente en el directorio interno privado de la app (filesDir), inaccesible para otras aplicaciones.",
+                "Cámara sin permisos invasivos" to "La captura de fotos delega en la cámara nativa vía FileProvider con URIs temporales seguros y utiliza Android Photo Picker sin solicitar acceso general a tu galería.",
+                "Visitas en solo lectura" to "Cuando compartes un link o código de colección, los valores monetarios estimados se omiten y solo tú como dueño puedes editar o eliminar piezas."
+            ),
+            onDismiss = { mostrarSheetPrivacidad = false }
+        )
+    }
+
+    if (mostrarVisitarSheet && onAbrirExposicion != null) {
+        VisitarExposicionSheet(
+            onDismiss = { mostrarVisitarSheet = false },
+            onVisitarCodigo = onAbrirExposicion
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SheetInformativoPerfil(
+    etiqueta: String,
+    titulo: String,
+    bloques: List<Pair<String, String>>,
+    accionExtra: (@Composable () -> Unit)? = null,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color(0xFF13110D),
+        contentColor = TextPrimary
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Text(
+                text = etiqueta,
+                color = AccentGold,
+                fontSize = 9.5.sp,
+                letterSpacing = 2.4.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = titulo,
+                color = TextPrimary,
+                fontSize = 19.sp,
+                fontFamily = VitherSerif
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            bloques.forEachIndexed { idx, (subtitulo, cuerpo) ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        text = subtitulo,
+                        color = AccentGold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = cuerpo,
+                        color = Color(0xFFACA395),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+                if (idx < bloques.lastIndex) {
+                    DivisorVitrinaPerfil()
+                }
+            }
+            accionExtra?.invoke()
         }
     }
 }

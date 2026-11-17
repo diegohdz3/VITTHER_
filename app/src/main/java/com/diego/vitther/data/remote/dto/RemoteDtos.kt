@@ -36,7 +36,8 @@ data class PiezaCloudDto(
     val valorEstimadoCentavos: Long? = null,
     val notaPersonal: String? = null,
     val destacada: Boolean = false,
-    val sincronizadoEn: Long
+    val sincronizadoEn: Long,
+    val fotoBase64: String? = null
 )
 
 @Serializable
@@ -46,7 +47,8 @@ data class CapsulaCloudDto(
     val titulo: String? = null,
     val fechaApertura: Long,
     val abiertaEn: Long? = null,
-    val notaRevelada: String? = null
+    val notaRevelada: String? = null,
+    val notaCompleta: String? = null
 )
 
 @Serializable
@@ -59,7 +61,8 @@ data class WishCloudDto(
     val metaPesos: Long? = null,
     val progresoPorcentaje: Int = 0,
     val fechaEstimadaLlegada: Long? = null,
-    val creadoEn: Long
+    val creadoEn: Long,
+    val fotoBase64: String? = null
 )
 
 @Serializable
@@ -72,5 +75,18 @@ data class RespaldoFirebaseDto(
     val totalWishes: Int = 0,
     val piezas: List<PiezaCloudDto> = emptyList(),
     val capsulas: List<CapsulaCloudDto> = emptyList(),
-    val wishes: List<WishCloudDto> = emptyList()
+    val wishes: List<WishCloudDto> = emptyList(),
+    val nombreMuseo: String? = null
+)
+
+@Serializable
+data class ColeccionCompartidaDto(
+    val codigo: String,
+    val propietarioUid: String,
+    val propietarioNombre: String,
+    val nombreMuseo: String,
+    val tituloExposicion: String,
+    val franquiciaFiltro: String? = null,
+    val compartidoEn: Long,
+    val piezas: List<PiezaCloudDto> = emptyList()
 )

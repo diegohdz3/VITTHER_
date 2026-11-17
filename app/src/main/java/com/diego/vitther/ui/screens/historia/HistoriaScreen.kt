@@ -3,16 +3,29 @@ package com.diego.vitther.ui.screens.historia
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import java.util.Locale
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,12 +51,14 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +83,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -75,6 +92,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -84,6 +102,7 @@ import com.diego.vitther.data.local.WishEntity
 import com.diego.vitther.domain.CapsulaVista
 import com.diego.vitther.domain.Fechas
 import com.diego.vitther.domain.Hito
+import com.diego.vitther.ui.components.NotaCuratorialPrimerIngreso
 import com.diego.vitther.ui.theme.AccentGold
 import com.diego.vitther.ui.theme.TextPrimary
 import com.diego.vitther.ui.theme.VitherSerif
@@ -154,6 +173,14 @@ private val TEMAS_RECORRIDO = listOf(
     )
 )
 
+fun temaAccentHex(temaId: String): String = when (temaId) {
+    "ambar" -> "#E8B472"
+    "carmesi" -> "#E58A96"
+    "esmeralda" -> "#7FD1A6"
+    "noche" -> "#9BB8FF"
+    else -> "#E8C97A"
+}
+
 private val EMBLEMAS_RECORRIDO = listOf("star", "heart", "sword", "crown", "flame", "moon")
 
 private data class GrupoRecorrido(
@@ -193,6 +220,7 @@ fun HistoriaScreen(
     archivo: (String?) -> File?,
     volver: () -> Unit = {},
     abrir: (Long) -> Unit,
+    onCompartirRecorrido: ((RecorridoMuseo, List<PiezaEntity>) -> Unit)? = null,
     capsulas: List<CapsulaVista> = emptyList(),
     wishes: List<WishEntity> = emptyList(),
     ahora: Long = System.currentTimeMillis()
@@ -222,83 +250,105 @@ fun HistoriaScreen(
             .fillMaxSize()
             .background(Color(0xFF0B0A08))
     ) {
-        when (vistaActual) {
-            VistaHistoria.ENTRADA -> {
-                VistaEntradaBoleteria(
-                    recorridos = recorridos,
-                    piezas = piezas,
-                    resolverArchivo = archivo,
-                    onIniciarRecorrido = { rec ->
-                        val piezasValidas = rec.piezaIds.mapNotNull { id -> piezas.find { it.id == id } }
-                        if (piezasValidas.isEmpty()) {
-                            recorridoEditandoId = rec.id
-                            vistaActual = VistaHistoria.EDITOR
-                            toastMsg = "Elige las piezas de este recorrido"
-                        } else {
-                            recorridoActivoId = rec.id
-                            vistaActual = VistaHistoria.RECORRIDO
-                        }
-                    },
-                    onEditarRecorrido = { rec ->
-                        recorridoEditandoId = rec.id
-                        vistaActual = VistaHistoria.EDITOR
-                    },
-                    onNuevoRecorrido = {
-                        recorridoEditandoId = null
-                        vistaActual = VistaHistoria.EDITOR
-                    }
-                )
-            }
-
-            VistaHistoria.RECORRIDO -> {
-                val rec = recorridos.find { it.id == recorridoActivoId }
-                if (rec == null) {
-                    vistaActual = VistaHistoria.ENTRADA
-                } else {
-                    VistaRecorridoGuiado(
-                        recorrido = rec,
-                        todasLasPiezas = piezas,
+        AnimatedContent(
+            targetState = vistaActual,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                (fadeIn(tween(340, easing = FastOutSlowInEasing)) +
+                    scaleIn(initialScale = 0.96f, animationSpec = tween(340, easing = FastOutSlowInEasing)))
+                    .togetherWith(fadeOut(tween(240)))
+            },
+            label = "transicionVistasHistoria"
+        ) { vista ->
+            when (vista) {
+                VistaHistoria.ENTRADA -> {
+                    VistaEntradaBoleteria(
+                        recorridos = recorridos,
+                        piezas = piezas,
                         resolverArchivo = archivo,
-                        onSalir = { vistaActual = VistaHistoria.ENTRADA },
-                        onEditar = {
+                        onIniciarRecorrido = { rec ->
+                            val piezasValidas = rec.piezaIds.mapNotNull { id -> piezas.find { it.id == id } }
+                            if (piezasValidas.isEmpty()) {
+                                recorridoEditandoId = rec.id
+                                vistaActual = VistaHistoria.EDITOR
+                                toastMsg = "Elige las piezas de este recorrido"
+                            } else {
+                                recorridoActivoId = rec.id
+                                vistaActual = VistaHistoria.RECORRIDO
+                            }
+                        },
+                        onEditarRecorrido = { rec ->
                             recorridoEditandoId = rec.id
                             vistaActual = VistaHistoria.EDITOR
                         },
-                        onAbrirPieza = abrir
+                        onCompartirRecorrido = onCompartirRecorrido?.let { callback ->
+                            { rec ->
+                                val ordenadas = construirGruposRecorrido(rec, piezas).flatMap { it.piezas }
+                                if (ordenadas.isEmpty()) {
+                                    toastMsg = "Agrega piezas al recorrido para compartirlo"
+                                } else {
+                                    callback(rec, ordenadas)
+                                }
+                            }
+                        },
+                        onNuevoRecorrido = {
+                            recorridoEditandoId = null
+                            vistaActual = VistaHistoria.EDITOR
+                        }
                     )
                 }
-            }
 
-            VistaHistoria.EDITOR -> {
-                val inicial = recorridos.find { it.id == recorridoEditandoId }
-                VistaEditorRecorrido(
-                    recorridoInicial = inicial,
-                    piezas = piezas,
-                    resolverArchivo = archivo,
-                    onCancelar = { vistaActual = VistaHistoria.ENTRADA },
-                    onMostrarToast = { toastMsg = it },
-                    onGuardar = { guardado, iniciarAlGuardar ->
-                        val existe = recorridos.any { it.id == guardado.id }
-                        val actualizados = if (existe) {
-                            recorridos.map { if (it.id == guardado.id) guardado else it }
-                        } else {
-                            recorridos + guardado
-                        }
-                        persistir(actualizados)
-                        if (iniciarAlGuardar) {
-                            recorridoActivoId = guardado.id
-                            vistaActual = VistaHistoria.RECORRIDO
-                        } else {
-                            toastMsg = "Recorrido guardado"
+                VistaHistoria.RECORRIDO -> {
+                    val rec = recorridos.find { it.id == recorridoActivoId }
+                    if (rec == null) {
+                        vistaActual = VistaHistoria.ENTRADA
+                    } else {
+                        VistaRecorridoGuiado(
+                            recorrido = rec,
+                            todasLasPiezas = piezas,
+                            resolverArchivo = archivo,
+                            onSalir = { vistaActual = VistaHistoria.ENTRADA },
+                            onEditar = {
+                                recorridoEditandoId = rec.id
+                                vistaActual = VistaHistoria.EDITOR
+                            },
+                            onAbrirPieza = abrir,
+                            onCompartir = onCompartirRecorrido
+                        )
+                    }
+                }
+
+                VistaHistoria.EDITOR -> {
+                    val inicial = recorridos.find { it.id == recorridoEditandoId }
+                    VistaEditorRecorrido(
+                        recorridoInicial = inicial,
+                        piezas = piezas,
+                        resolverArchivo = archivo,
+                        onCancelar = { vistaActual = VistaHistoria.ENTRADA },
+                        onMostrarToast = { toastMsg = it },
+                        onGuardar = { guardado, iniciarAlGuardar ->
+                            val existe = recorridos.any { it.id == guardado.id }
+                            val actualizados = if (existe) {
+                                recorridos.map { if (it.id == guardado.id) guardado else it }
+                            } else {
+                                recorridos + guardado
+                            }
+                            persistir(actualizados)
+                            if (iniciarAlGuardar) {
+                                recorridoActivoId = guardado.id
+                                vistaActual = VistaHistoria.RECORRIDO
+                            } else {
+                                toastMsg = "Recorrido guardado"
+                                vistaActual = VistaHistoria.ENTRADA
+                            }
+                        },
+                        onEliminar = { idEliminar ->
+                            persistir(recorridos.filterNot { it.id == idEliminar })
+                            toastMsg = "Recorrido eliminado"
                             vistaActual = VistaHistoria.ENTRADA
                         }
-                    },
-                    onEliminar = { idEliminar ->
-                        persistir(recorridos.filterNot { it.id == idEliminar })
-                        toastMsg = "Recorrido eliminado"
-                        vistaActual = VistaHistoria.ENTRADA
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -336,6 +386,7 @@ private fun VistaEntradaBoleteria(
     resolverArchivo: (String?) -> File?,
     onIniciarRecorrido: (RecorridoMuseo) -> Unit,
     onEditarRecorrido: (RecorridoMuseo) -> Unit,
+    onCompartirRecorrido: ((RecorridoMuseo) -> Unit)? = null,
     onNuevoRecorrido: () -> Unit
 ) {
     Column(
@@ -368,6 +419,18 @@ private fun VistaEntradaBoleteria(
             )
         }
 
+        NotaCuratorialPrimerIngreso(
+            moduloKey = "historia",
+            titulo = "Recorridos guiados con voz",
+            descripcion = "Revive la cronología y memorias de tu vitrina como un museo:",
+            puntos = listOf(
+                "Crea boletos de recorrido ordenados por fecha o por sala temática.",
+                "Activa el ícono de audífonos dentro de un recorrido para iniciar la audioguía narrada.",
+                "Cada parada muestra la fecha, fotografía e historia personal de tu figura."
+            ),
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
         // Lista de boletos (.tks)
         Column(
             modifier = Modifier
@@ -383,7 +446,8 @@ private fun VistaEntradaBoleteria(
                     resolverArchivo = resolverArchivo,
                     mostrarBotonEditar = true,
                     onClick = { onIniciarRecorrido(rec) },
-                    onEditar = { onEditarRecorrido(rec) }
+                    onEditar = { onEditarRecorrido(rec) },
+                    onCompartir = onCompartirRecorrido?.let { cb -> { cb(rec) } }
                 )
             }
 
@@ -452,7 +516,8 @@ private fun BoletoRecorridoCard(
     resolverArchivo: (String?) -> File?,
     mostrarBotonEditar: Boolean,
     onClick: () -> Unit,
-    onEditar: () -> Unit = {}
+    onEditar: () -> Unit = {},
+    onCompartir: (() -> Unit)? = null
 ) {
     val tema = TEMAS_RECORRIDO.find { it.id == recorrido.tema } ?: TEMAS_RECORRIDO.first()
 
@@ -584,24 +649,24 @@ private fun BoletoRecorridoCard(
                     }
                 }
 
-                if (mostrarBotonEditar) {
+                if (onCompartir != null) {
                     Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF17130C))
-                            .border(1.dp, Color(0xFF2D2619), CircleShape)
-                            .clickable(onClick = onEditar),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Edit,
-                            contentDescription = "Editar recorrido",
-                            tint = Color(0xFF8A8073),
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
+                    BotonAccionCirculo(
+                        icono = Icons.Outlined.Share,
+                        descripcion = "Compartir recorrido",
+                        tinte = tema.acento,
+                        onClick = onCompartir
+                    )
+                }
+
+                if (mostrarBotonEditar) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    BotonAccionCirculo(
+                        icono = Icons.Outlined.Edit,
+                        descripcion = "Editar recorrido",
+                        tinte = Color(0xFF8A8073),
+                        onClick = onEditar
+                    )
                 }
             }
         }
@@ -629,13 +694,43 @@ private fun BoletoRecorridoCard(
 }
 
 @Composable
+private fun BotonAccionCirculo(
+    icono: ImageVector,
+    descripcion: String,
+    tinte: Color,
+    tamanoBoton: Dp = 28.dp,
+    tamanoIcono: Dp = 13.dp,
+    fondo: Color = Color(0xFF17130C),
+    borde: Color = Color(0xFF2D2619),
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(tamanoBoton)
+            .clip(CircleShape)
+            .background(fondo)
+            .border(1.dp, borde, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icono,
+            contentDescription = descripcion,
+            tint = tinte,
+            modifier = Modifier.size(tamanoIcono)
+        )
+    }
+}
+
+@Composable
 private fun VistaRecorridoGuiado(
     recorrido: RecorridoMuseo,
     todasLasPiezas: List<PiezaEntity>,
     resolverArchivo: (String?) -> File?,
     onSalir: () -> Unit,
     onEditar: () -> Unit,
-    onAbrirPieza: (Long) -> Unit
+    onAbrirPieza: (Long) -> Unit,
+    onCompartir: ((RecorridoMuseo, List<PiezaEntity>) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val tema = TEMAS_RECORRIDO.find { it.id == recorrido.tema } ?: TEMAS_RECORRIDO.first()
@@ -656,9 +751,9 @@ private fun VistaRecorridoGuiado(
         motor = TextToSpeech(contexto.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 motor?.let { m ->
-                    val resultado = m.setLanguage(Locale("es", "MX"))
+                    val resultado = m.setLanguage(Locale.forLanguageTag("es-MX"))
                     if (resultado == TextToSpeech.LANG_MISSING_DATA || resultado == TextToSpeech.LANG_NOT_SUPPORTED) {
-                        m.setLanguage(Locale("es", "ES"))
+                        m.setLanguage(Locale.forLanguageTag("es-ES"))
                     }
                     ttsListo = true
                 }
@@ -676,6 +771,8 @@ private fun VistaRecorridoGuiado(
     var enFinal by rememberSaveable(recorrido.id) { mutableStateOf(false) }
     var abriendoPuerta by remember { mutableStateOf(false) }
     var audioguiaActiva by rememberSaveable { mutableStateOf(false) }
+    var velocidadAudio by rememberSaveable { mutableFloatStateOf(1.0f) }
+    var direccionAvance by remember { mutableIntStateOf(1) }
 
     val grupoActual = grupos.getOrElse(grupoIdx) { grupos.firstOrNull() }
     val piezaActual = if (!enFinal && paradaIdx >= 0) grupoActual?.piezas?.getOrNull(paradaIdx) else null
@@ -710,6 +807,7 @@ private fun VistaRecorridoGuiado(
         tts?.stop()
         val g = grupoActual ?: return
         if (enFinal) return
+        direccionAvance = 1
         if (paradaIdx < 0) {
             if (abriendoPuerta) return
             scope.launch {
@@ -733,6 +831,7 @@ private fun VistaRecorridoGuiado(
 
     fun retroceder() {
         tts?.stop()
+        direccionAvance = -1
         if (enFinal) {
             enFinal = false
             grupoIdx = (grupos.size - 1).coerceAtLeast(0)
@@ -755,6 +854,8 @@ private fun VistaRecorridoGuiado(
             tts?.stop()
             return@LaunchedEffect
         }
+        val factorVel = 1f / velocidadAudio.coerceAtLeast(0.5f)
+        tts?.setSpeechRate(velocidadAudio)
         if (paradaIdx < 0) {
             val textoPuerta = listOfNotNull(grupoActual?.titulo, grupoActual?.cita)
                 .filter { it.isNotBlank() }
@@ -762,7 +863,7 @@ private fun VistaRecorridoGuiado(
             if (textoPuerta.isNotBlank() && ttsListo) {
                 tts?.speak(textoPuerta, TextToSpeech.QUEUE_FLUSH, null, "guia_puerta")
             }
-            delay(2600)
+            delay((2600f * factorVel).toLong())
             if (audioguiaActiva) avanzar()
         } else {
             val textoHablar = listOfNotNull(
@@ -776,12 +877,17 @@ private fun VistaRecorridoGuiado(
                 tts?.speak(textoHablar, TextToSpeech.QUEUE_FLUSH, null, "guia_pieza")
             }
 
+            val delayChar = if (velocidadAudio > 1.1f) 18L else 24L
             textoGuiaVisible = ""
             for (i in 1..textoGuiaCompleto.length) {
                 textoGuiaVisible = textoGuiaCompleto.take(i)
-                delay(24)
+                delay(delayChar)
             }
-            delay(3200)
+            val esperaLectura = maxOf(
+                (2800f * factorVel).toLong(),
+                (textoHablar.length * 65f * factorVel).toLong() - (textoGuiaCompleto.length * delayChar)
+            )
+            delay(esperaLectura)
             if (audioguiaActiva) avanzar()
         }
     }
@@ -796,29 +902,22 @@ private fun VistaRecorridoGuiado(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF15130F))
-                    .border(1.dp, Color(0xFF2B251B), CircleShape)
-                    .clickable {
-                        audioguiaActiva = false
-                        tts?.stop()
-                        onSalir()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                    contentDescription = "Salir del recorrido",
-                    tint = Color(0xFFD8D0C2),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            BotonAccionCirculo(
+                icono = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                descripcion = "Salir del recorrido",
+                tinte = Color(0xFFD8D0C2),
+                tamanoBoton = 34.dp,
+                tamanoIcono = 18.dp,
+                fondo = Color(0xFF15130F),
+                borde = Color(0xFF2B251B),
+                onClick = {
+                    audioguiaActiva = false
+                    tts?.stop()
+                    onSalir()
+                }
+            )
 
             val etiquetaSuperior = when {
                 enFinal -> "SALIDA"
@@ -829,184 +928,334 @@ private fun VistaRecorridoGuiado(
                 text = etiquetaSuperior.uppercase(),
                 color = Color(0xFF8A8073),
                 fontSize = 9.5.sp,
-                letterSpacing = 2.6.sp
+                letterSpacing = 2.6.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
             )
 
-            // Botón Audioguía (#au)
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(if (audioguiaActiva) Color(0xFF221C11) else Color(0xFF15130F))
-                    .border(
-                        1.dp,
-                        if (audioguiaActiva) tema.acento else Color(0xFF2B251B),
-                        CircleShape
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedVisibility(visible = audioguiaActiva) {
+                    val pulso = rememberInfiniteTransition(label = "audioPulse")
+                    val alphaPulso by pulso.animateFloat(
+                        initialValue = 0.35f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(680, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "audioPulseAlpha"
                     )
-                    .clickable {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFF221C11))
+                            .border(1.dp, tema.borde, RoundedCornerShape(999.dp))
+                            .clickable {
+                                velocidadAudio = if (velocidadAudio > 1.1f) 1.0f else 1.25f
+                                tts?.setSpeechRate(velocidadAudio)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .alpha(alphaPulso)
+                                .clip(CircleShape)
+                                .background(tema.acento)
+                        )
+                        Text(
+                            text = if (velocidadAudio > 1.1f) "1.25×" else "1.0×",
+                            color = tema.acento,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                if (onCompartir != null && todasEnRecorrido.isNotEmpty()) {
+                    BotonAccionCirculo(
+                        icono = Icons.Outlined.Share,
+                        descripcion = "Compartir recorrido",
+                        tinte = Color(0xFFD8D0C2),
+                        tamanoBoton = 34.dp,
+                        tamanoIcono = 15.dp,
+                        fondo = Color(0xFF15130F),
+                        borde = Color(0xFF2B251B),
+                        onClick = {
+                            audioguiaActiva = false
+                            tts?.stop()
+                            onCompartir(recorrido, todasEnRecorrido)
+                        }
+                    )
+                }
+
+                // Botón Audioguía (#au)
+                BotonAccionCirculo(
+                    icono = Icons.Outlined.Headphones,
+                    descripcion = "Audioguía",
+                    tinte = if (audioguiaActiva) tema.acento else Color(0xFFD8D0C2),
+                    tamanoBoton = 34.dp,
+                    tamanoIcono = 16.dp,
+                    fondo = if (audioguiaActiva) Color(0xFF221C11) else Color(0xFF15130F),
+                    borde = if (audioguiaActiva) tema.acento else Color(0xFF2B251B),
+                    onClick = {
                         audioguiaActiva = !audioguiaActiva
                         if (!audioguiaActiva) {
                             tts?.stop()
                             textoGuiaVisible = textoGuiaCompleto
                         }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Headphones,
-                    contentDescription = "Audioguía",
-                    tint = if (audioguiaActiva) tema.acento else Color(0xFFD8D0C2),
-                    modifier = Modifier.size(16.dp)
+                    }
                 )
             }
         }
 
-        // Escenario central (.vp)
+        // Escenario central (.vp) con swipe horizontal + transición direccional
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .pointerInput(enFinal, grupoIdx, paradaIdx, abriendoPuerta) {
+                    var dragTotal = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragTotal = 0f },
+                        onHorizontalDrag = { _, dragAmount -> dragTotal += dragAmount },
+                        onDragEnd = {
+                            val enInicioSwipe = !enFinal && grupoIdx == 0 && paradaIdx < 0
+                            when {
+                                dragTotal < -65f && !enFinal -> {
+                                    audioguiaActiva = false
+                                    avanzar()
+                                }
+                                dragTotal > 65f && !enInicioSwipe -> {
+                                    audioguiaActiva = false
+                                    retroceder()
+                                }
+                            }
+                        }
+                    )
+                },
             contentAlignment = Alignment.Center
         ) {
-            when {
-                enFinal -> {
-                    // Fin del recorrido (.end)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp, vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        EmblemaIcono(
-                            emblema = recorrido.emblema,
-                            color = tema.acento,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "FIN DEL RECORRIDO",
-                            color = tema.acento,
-                            fontSize = 9.5.sp,
-                            letterSpacing = 3.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = recorrido.nombre,
-                            fontFamily = VitherSerif,
-                            fontSize = 34.sp,
-                            color = TextPrimary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 36.sp
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "${todasEnRecorrido.size} ${if (todasEnRecorrido.size == 1) "PARADA" else "PARADAS"}",
-                            color = Color(0xFF7A7267),
-                            fontSize = 9.5.sp,
-                            letterSpacing = 2.4.sp
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Cada pieza guarda el momento en que llegó a tu vida.",
-                            fontFamily = VitherSerif,
-                            fontStyle = FontStyle.Italic,
-                            fontSize = 16.sp,
-                            color = Color(0xFFC9C0B0),
-                            textAlign = TextAlign.Center,
-                            lineHeight = 23.sp
-                        )
-                        Spacer(modifier = Modifier.height(22.dp))
+            AnimatedContent(
+                targetState = Triple(enFinal, grupoIdx, paradaIdx),
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = {
+                    val dir = if (direccionAvance >= 0) 1 else -1
+                    (slideInHorizontally(
+                        animationSpec = tween(320, easing = FastOutSlowInEasing),
+                        initialOffsetX = { w -> (w * 0.22f * dir).toInt() }
+                    ) + fadeIn(tween(240))) togetherWith (slideOutHorizontally(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        targetOffsetX = { w -> (-w * 0.16f * dir).toInt() }
+                    ) + fadeOut(tween(180)))
+                },
+                label = "escenaRecorrido"
+            ) { (esFin, gIdxEscena, pIdxEscena) ->
+                val gEscena = grupos.getOrNull(gIdxEscena)
+                val piezaEscena = if (!esFin && pIdxEscena >= 0) gEscena?.piezas?.getOrNull(pIdxEscena) else null
 
-                        // Botón primario: Elegir otro recorrido
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFF282112), Color(0xFF1B160C))
-                                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        esFin -> {
+                            // Fin del recorrido (.end)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 32.dp, vertical = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                EmblemaIcono(
+                                    emblema = recorrido.emblema,
+                                    color = tema.acento,
+                                    modifier = Modifier.size(28.dp)
                                 )
-                                .border(1.dp, tema.borde, RoundedCornerShape(13.dp))
-                                .clickable(onClick = onSalir)
-                                .padding(vertical = 14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Elegir otro recorrido",
-                                color = tema.acento,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "FIN DEL RECORRIDO",
+                                    color = tema.acento,
+                                    fontSize = 9.5.sp,
+                                    letterSpacing = 3.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = recorrido.nombre,
+                                    fontFamily = VitherSerif,
+                                    fontSize = 34.sp,
+                                    color = TextPrimary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 36.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "${todasEnRecorrido.size} ${if (todasEnRecorrido.size == 1) "PARADA" else "PARADAS"}",
+                                    color = Color(0xFF7A7267),
+                                    fontSize = 9.5.sp,
+                                    letterSpacing = 2.4.sp
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Cada pieza guarda el momento en que llegó a tu vida.",
+                                    fontFamily = VitherSerif,
+                                    fontStyle = FontStyle.Italic,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFFC9C0B0),
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 23.sp
+                                )
+                                Spacer(modifier = Modifier.height(22.dp))
 
-                        // Volver a empezar
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(Color(0xFF17140E))
-                                .border(1.dp, Color(0xFF262117), RoundedCornerShape(13.dp))
-                                .clickable {
-                                    enFinal = false
-                                    grupoIdx = 0
-                                    paradaIdx = -1
+                                if (onCompartir != null && todasEnRecorrido.isNotEmpty()) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp)
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(Color(0xFF282112), Color(0xFF1B160C))
+                                                )
+                                            )
+                                            .border(1.dp, tema.borde, RoundedCornerShape(13.dp))
+                                            .clickable { onCompartir(recorrido, todasEnRecorrido) }
+                                            .padding(vertical = 14.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Share,
+                                            contentDescription = null,
+                                            tint = tema.acento,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Compartir recorrido",
+                                            color = tema.acento,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
-                                .padding(vertical = 14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Volver a empezar",
-                                color = TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+
+                                // Botón: Elegir otro recorrido
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .clip(RoundedCornerShape(13.dp))
+                                        .background(
+                                            if (onCompartir == null) {
+                                                Brush.linearGradient(
+                                                    listOf(Color(0xFF282112), Color(0xFF1B160C))
+                                                )
+                                            } else {
+                                                SolidColor(Color(0xFF17140E))
+                                            }
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (onCompartir == null) tema.borde else Color(0xFF262117),
+                                            RoundedCornerShape(13.dp)
+                                        )
+                                        .clickable(onClick = onSalir)
+                                        .padding(vertical = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Elegir otro recorrido",
+                                        color = if (onCompartir == null) tema.acento else TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                // Volver a empezar
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .clip(RoundedCornerShape(13.dp))
+                                        .background(Color(0xFF17140E))
+                                        .border(1.dp, Color(0xFF262117), RoundedCornerShape(13.dp))
+                                        .clickable {
+                                            direccionAvance = -1
+                                            enFinal = false
+                                            grupoIdx = 0
+                                            paradaIdx = -1
+                                        }
+                                        .padding(vertical = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Volver a empezar",
+                                        color = TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                // Editar recorrido
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(13.dp))
+                                        .background(Color(0xFF17140E))
+                                        .border(1.dp, Color(0xFF262117), RoundedCornerShape(13.dp))
+                                        .clickable(onClick = onEditar)
+                                        .padding(vertical = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Editar recorrido",
+                                        color = TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        pIdxEscena < 0 && gEscena != null -> {
+                            // Puerta doble de entrada a la Sala / Época (.ep + .door)
+                            PuertaMuseoSala(
+                                grupo = gEscena,
+                                tema = tema,
+                                abriendo = abriendoPuerta,
+                                onAbrirPuerta = { avanzar() }
                             )
                         }
 
-                        // Editar recorrido
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(Color(0xFF17140E))
-                                .border(1.dp, Color(0xFF262117), RoundedCornerShape(13.dp))
-                                .clickable(onClick = onEditar)
-                                .padding(vertical = 14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Editar recorrido",
-                                color = TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                        piezaEscena != null -> {
+                            // Parada de pieza en el escenario iluminado (.stg + .plq)
+                            val textoParada = if (piezaEscena.id == piezaActual?.id) {
+                                textoGuiaVisible
+                            } else {
+                                ""
+                            }
+                            ParadaPiezaMuseo(
+                                pieza = piezaEscena,
+                                esPrimeraPieza = piezaEscena.id == idPrimeraGlobal,
+                                textoGuia = textoParada,
+                                tema = tema,
+                                resolverArchivo = resolverArchivo,
+                                onClickPieza = { onAbrirPieza(piezaEscena.id) }
                             )
                         }
                     }
-                }
-
-                paradaIdx < 0 && grupoActual != null -> {
-                    // Puerta doble de entrada a la Sala / Época (.ep + .door)
-                    PuertaMuseoSala(
-                        grupo = grupoActual,
-                        tema = tema,
-                        abriendo = abriendoPuerta,
-                        onAbrirPuerta = { avanzar() }
-                    )
-                }
-
-                piezaActual != null -> {
-                    // Parada de pieza en el escenario iluminado (.stg + .plq)
-                    ParadaPiezaMuseo(
-                        pieza = piezaActual,
-                        esPrimeraPieza = piezaActual.id == idPrimeraGlobal,
-                        textoGuia = textoGuiaVisible,
-                        tema = tema,
-                        resolverArchivo = resolverArchivo,
-                        onClickPieza = { onAbrirPieza(piezaActual.id) }
-                    )
                 }
             }
         }
@@ -1022,21 +1271,27 @@ private fun VistaRecorridoGuiado(
             grupos.forEachIndexed { gi, g ->
                 val esSalaActiva = !enFinal && gi == grupoIdx
                 val esSalaPasada = enFinal || gi < grupoIdx
+                val bgSala by animateColorAsState(
+                    targetValue = if (esSalaActiva) Color(0xFF17130B) else Color(0xFF12100C),
+                    animationSpec = tween(240),
+                    label = "bgSala"
+                )
+                val bordeSala by animateColorAsState(
+                    targetValue = when {
+                        esSalaActiva -> tema.borde
+                        esSalaPasada -> Color(0xFF3A3120)
+                        else -> Color(0xFF242018)
+                    },
+                    animationSpec = tween(240),
+                    label = "bordeSala"
+                )
                 Row(
                     modifier = Modifier
                         .weight(g.piezas.size.coerceAtLeast(1).toFloat())
                         .height(22.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .background(if (esSalaActiva) Color(0xFF17130B) else Color(0xFF12100C))
-                        .border(
-                            1.dp,
-                            when {
-                                esSalaActiva -> tema.borde
-                                esSalaPasada -> Color(0xFF3A3120)
-                                else -> Color(0xFF242018)
-                            },
-                            RoundedCornerShape(6.dp)
-                        )
+                        .background(bgSala)
+                        .border(1.dp, bordeSala, RoundedCornerShape(6.dp))
                         .padding(horizontal = 6.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
@@ -1044,18 +1299,29 @@ private fun VistaRecorridoGuiado(
                     g.piezas.forEachIndexed { pi, _ ->
                         val puntoActivo = esSalaActiva && paradaIdx == pi
                         val puntoPasado = esSalaPasada || (esSalaActiva && paradaIdx > pi)
+                        val dotSize by animateDpAsState(
+                            targetValue = if (puntoActivo) 9.dp else 5.dp,
+                            animationSpec = tween(220),
+                            label = "dotSize"
+                        )
+                        val dotColor by animateColorAsState(
+                            targetValue = when {
+                                puntoActivo -> tema.acento
+                                puntoPasado -> Color(0xFF6B5832)
+                                else -> Color(0xFF2D271C)
+                            },
+                            animationSpec = tween(220),
+                            label = "dotColor"
+                        )
                         Box(
                             modifier = Modifier
-                                .size(if (puntoActivo) 7.dp else 5.dp)
+                                .size(dotSize)
                                 .clip(CircleShape)
-                                .background(
-                                    when {
-                                        puntoActivo -> tema.acento
-                                        puntoPasado -> Color(0xFF6B5832)
-                                        else -> Color(0xFF2D271C)
-                                    }
-                                )
+                                .background(dotColor)
                                 .clickable {
+                                    val irAdelante = enFinal.not() &&
+                                        (gi > grupoIdx || (gi == grupoIdx && pi >= paradaIdx))
+                                    direccionAvance = if (irAdelante) 1 else -1
                                     audioguiaActiva = false
                                     enFinal = false
                                     grupoIdx = gi
@@ -1103,12 +1369,20 @@ private fun VistaRecorridoGuiado(
                 )
             }
 
-            Text(
-                text = etiquetaProgreso.uppercase(),
-                color = Color(0xFF7A7267),
-                fontSize = 9.5.sp,
-                letterSpacing = 2.4.sp
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = etiquetaProgreso.uppercase(),
+                    color = Color(0xFF7A7267),
+                    fontSize = 9.5.sp,
+                    letterSpacing = 2.4.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Desliza ↔ o toca los puntos",
+                    color = Color(0xFF564F45),
+                    fontSize = 9.sp
+                )
+            }
 
             Box(
                 modifier = Modifier
@@ -1699,7 +1973,8 @@ private fun VistaEditorRecorrido(
                 listOf(
                     "manual" to "Mi orden",
                     "fecha" to "Por años",
-                    "sala" to "Por salas"
+                    "sala" to "Por salas",
+                    "valor" to "Por valor"
                 ).forEach { (clave, etiqueta) ->
                     val activo = orden == clave
                     Box(
@@ -1719,8 +1994,10 @@ private fun VistaEditorRecorrido(
                         Text(
                             text = etiqueta,
                             color = if (activo) temaActual.acento else Color(0xFF7A7267),
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -1728,6 +2005,79 @@ private fun VistaEditorRecorrido(
 
             // ELIGE LAS PIEZAS (#pgR)
             EtiquetaSeccionEditor("ELIGE LAS PIEZAS")
+            if (piezas.isNotEmpty()) {
+                val plantillas = remember(piezas) {
+                    buildList {
+                        add("✦ Todas" to piezas.map { it.id })
+                        val destacadasIds = piezas.filter { it.destacada }.map { it.id }
+                        if (destacadasIds.isNotEmpty()) add("★ Destacadas" to destacadasIds)
+                        val limitadasIds = piezas.filter { it.edicionLimitada }.map { it.id }
+                        if (limitadasIds.isNotEmpty()) add("Limitadas" to limitadasIds)
+                        piezas.map { it.franquicia.trim() }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+                            .sorted()
+                            .forEach { franq ->
+                                add(
+                                    franq to piezas
+                                        .filter { it.franquicia.equals(franq, ignoreCase = true) }
+                                        .map { it.id }
+                                )
+                            }
+                    }
+                }
+                val seleccionSet = seleccionadas.toSet()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    plantillas.forEach { (etiqueta, idsObjetivo) ->
+                        val activa = idsObjetivo.isNotEmpty() && seleccionSet == idsObjetivo.toSet()
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (activa) Color(0xFF211C13) else Color(0xFF14110C))
+                                .border(
+                                    1.dp,
+                                    if (activa) temaActual.borde else Color(0xFF2A241A),
+                                    RoundedCornerShape(999.dp)
+                                )
+                                .clickable {
+                                    seleccionadas.clear()
+                                    seleccionadas.addAll(idsObjetivo)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = etiqueta,
+                                color = if (activa) temaActual.acento else Color(0xFFA59C8E),
+                                fontSize = 11.sp,
+                                fontWeight = if (activa) FontWeight.SemiBold else FontWeight.Medium
+                            )
+                        }
+                    }
+                    if (seleccionadas.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Color(0xFF14110C))
+                                .border(1.dp, Color(0xFF3A2522), RoundedCornerShape(999.dp))
+                                .clickable { seleccionadas.clear() }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Limpiar",
+                                color = Color(0xFFC98B8B),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
             if (piezas.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -2068,6 +2418,23 @@ private fun construirGruposRecorrido(
                     piezas = piezasSala
                 )
             }
+        }
+
+        "valor" -> {
+            val ordenadas = lista.sortedWith(
+                compareByDescending<PiezaEntity> { it.valorEstimadoCentavos ?: -1L }
+                    .thenByDescending { it.destacada }
+                    .thenBy { it.fechaAdquisicion }
+            )
+            listOf(
+                GrupoRecorrido(
+                    etiqueta = "COLECCIÓN SELECTA",
+                    numeroGrande = "I",
+                    titulo = recorrido.nombre,
+                    cita = recorrido.subtitulo.ifBlank { "De la joya más valiosa a las piezas esenciales." },
+                    piezas = ordenadas
+                )
+            )
         }
 
         else -> {

@@ -3,6 +3,7 @@ package com.diego.vitther.ui.screens.wishes
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -13,6 +14,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,6 +96,7 @@ import com.diego.vitther.data.local.WishEntity
 import com.diego.vitther.domain.EstadoWish
 import com.diego.vitther.domain.Fechas
 import com.diego.vitther.presentation.wishes.WishesViewModel
+import com.diego.vitther.ui.components.NotaCuratorialPrimerIngreso
 import com.diego.vitther.ui.theme.AccentGold
 import com.diego.vitther.ui.theme.TextPrimary
 import com.diego.vitther.ui.theme.TextSecondary
@@ -197,6 +202,17 @@ fun WishesScreen(
                 }
             }
 
+            NotaCuratorialPrimerIngreso(
+                moduloKey = "wishes",
+                titulo = "Preventas y lista de deseos",
+                descripcion = "Organiza tus próximas incorporaciones al museo:",
+                puntos = listOf(
+                    "En “Por llegar” controlas preventas con cuenta regresiva hasta su llegada.",
+                    "En “Deseadas” guardas las figuras que buscas y su meta estimada.",
+                    "Cuando una preventa llegue, márcala como recibida para sumarla directo a tu colección."
+                )
+            )
+
             // Pestañas (.tabs)
             Row(
                 modifier = Modifier
@@ -227,30 +243,49 @@ fun WishesScreen(
                     .background(Color(0xFF1D1913))
             )
 
-            // Contenido de la pestaña activa
-            if (tabSeleccionada == 0) {
-                SeccionPorLlegar(
-                    items = state.porLlegar,
-                    levantandoVeloId = levantandoVeloId,
-                    resolverArchivo = viewModel::archivo,
-                    onTapItem = { wishAccion = it },
-                    onReservarNuevo = {
-                        wishEditando = null
-                        estadoInicialForm = EstadoWish.POR_LLEGAR
-                        mostrarForm = true
+            // Contenido de la pestaña activa con transición direccional
+            AnimatedContent(
+                targetState = tabSeleccionada,
+                modifier = Modifier.fillMaxWidth(),
+                transitionSpec = {
+                    val haciaDeseadas = targetState > initialState
+                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) {
+                        if (haciaDeseadas) it / 5 else -it / 5
+                    } + fadeIn(tween(260)))
+                        .togetherWith(
+                            slideOutHorizontally(tween(220)) {
+                                if (haciaDeseadas) -it / 6 else it / 6
+                            } + fadeOut(tween(180))
+                        )
+                },
+                label = "transicionTabsWishes"
+            ) { tab ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (tab == 0) {
+                        SeccionPorLlegar(
+                            items = state.porLlegar,
+                            levantandoVeloId = levantandoVeloId,
+                            resolverArchivo = viewModel::archivo,
+                            onTapItem = { wishAccion = it },
+                            onReservarNuevo = {
+                                wishEditando = null
+                                estadoInicialForm = EstadoWish.POR_LLEGAR
+                                mostrarForm = true
+                            }
+                        )
+                    } else {
+                        SeccionDeseadas(
+                            items = state.deseadas,
+                            resolverArchivo = viewModel::archivo,
+                            onTapItem = { wishAccion = it },
+                            onAgregarDeseo = {
+                                wishEditando = null
+                                estadoInicialForm = EstadoWish.DESEADA
+                                mostrarForm = true
+                            }
+                        )
                     }
-                )
-            } else {
-                SeccionDeseadas(
-                    items = state.deseadas,
-                    resolverArchivo = viewModel::archivo,
-                    onTapItem = { wishAccion = it },
-                    onAgregarDeseo = {
-                        wishEditando = null
-                        estadoInicialForm = EstadoWish.DESEADA
-                        mostrarForm = true
-                    }
-                )
+                }
             }
         }
 

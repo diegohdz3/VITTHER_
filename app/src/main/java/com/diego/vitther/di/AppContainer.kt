@@ -1,6 +1,7 @@
 package com.diego.vitther.di
 
 import android.content.Context
+import com.diego.vitther.data.auth.VittherAuthManager
 import com.diego.vitther.data.local.SeedData
 import com.diego.vitther.data.local.VittherDatabase
 import com.diego.vitther.data.remote.api.VittherRemoteApiClient
@@ -31,6 +32,7 @@ class AppContainer(context: Context) {
     val wishRepository = WishRepository(baseDatos.wishDao())
     val catalogoRemotoRepository = CatalogoRemotoRepository(remoteClient, remoteClient)
     val fotos = com.diego.vitther.data.media.FotoStore(appContext)
+    val authManager = VittherAuthManager(appContext)
 
     init {
         alcance.launch {
@@ -44,15 +46,22 @@ class AppContainer(context: Context) {
     }
 
     fun sincronizarEnSegundoPlano() {
+        val cuenta = authManager.usuarioActual.value ?: return
         alcance.launch {
             runCatching {
                 val piezasActuales = piezaRepository.observarTodas().first()
                 val capsulasActuales = capsulaRepository.observarTodas().first()
                 val wishesActuales = wishRepository.observarTodos().first()
+                val fotosPiezas = piezasActuales.associate { it.id to fotos.codificarBase64(it.fotoPath) }
+                val fotosWishes = wishesActuales.associate { it.id to fotos.codificarBase64(it.fotoPath) }
                 catalogoRemotoRepository.respaldarEnFirebase(
                     piezas = piezasActuales,
                     capsulas = capsulasActuales,
-                    wishes = wishesActuales
+                    wishes = wishesActuales,
+                    coleccionista = cuenta.nombre,
+                    fotosPiezas = fotosPiezas,
+                    fotosWishes = fotosWishes,
+                    uid = cuenta.uid
                 )
             }
         }

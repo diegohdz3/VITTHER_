@@ -1,17 +1,28 @@
 package com.diego.vitther.ui.screens.coleccion
 
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import androidx.core.content.ContextCompat
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import com.diego.vitther.data.local.PiezaEntity
 import com.diego.vitther.domain.*
+import com.diego.vitther.integration.CedulaPdfExporter
 import com.diego.vitther.ui.ColeccionViewModel
 import com.diego.vitther.ui.components.*
 import java.text.NumberFormat
@@ -84,14 +96,68 @@ fun CedulaScreen(
         return
     }
 
+    val formatoMoneda = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-MX")) }
+    val contexto = LocalContext.current
+    val ocultarPorDefecto = remember(contexto) {
+        contexto.getSharedPreferences("vitther_perfil_prefs", Context.MODE_PRIVATE)
+            .getBoolean("ocultar_valor", false)
+    }
+
     var tabSeleccionada by rememberSaveable(pieza.id) { mutableIntStateOf(0) }
-    var mostrarValor by rememberSaveable(pieza.id) { mutableStateOf(false) }
+    var mostrarValor by rememberSaveable(pieza.id) { mutableStateOf(!ocultarPorDefecto) }
     var mostrarSheet by rememberSaveable(pieza.id) { mutableStateOf(false) }
     var modoContemplar by rememberSaveable(pieza.id) { mutableStateOf(false) }
     var confirmarEliminar by remember { mutableStateOf(false) }
 
-    val formatoMoneda = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-MX")) }
-    val contexto = LocalContext.current
+    var zoomContemplar by remember { mutableFloatStateOf(1f) }
+    var offsetContemplar by remember { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(modoContemplar) {
+        if (!modoContemplar) {
+            zoomContemplar = 1f
+            offsetContemplar = Offset.Zero
+        }
+    }
+
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    var ttsListo by remember { mutableStateOf(false) }
+    var narrandoHistoria by remember { mutableStateOf(false) }
+
+    DisposableEffect(contexto) {
+        var motor: TextToSpeech? = null
+        motor = TextToSpeech(contexto.applicationContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                motor?.let { m ->
+                    val res = m.setLanguage(Locale.forLanguageTag("es-MX"))
+                    if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        m.setLanguage(Locale("es", "ES"))
+                    }
+                    m.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                        override fun onStart(utteranceId: String?) {}
+                        override fun onDone(utteranceId: String?) {
+                            ContextCompat.getMainExecutor(contexto).execute { narrandoHistoria = false }
+                        }
+                        @Deprecated("Deprecated in Java")
+                        override fun onError(utteranceId: String?) {
+                            ContextCompat.getMainExecutor(contexto).execute { narrandoHistoria = false }
+                        }
+                    })
+                    ttsListo = true
+                }
+            }
+        }
+        tts = motor
+        onDispose {
+            motor?.stop()
+            motor?.shutdown()
+        }
+    }
+    LaunchedEffect(tabSeleccionada) {
+        if (tabSeleccionada != 1 && narrandoHistoria) {
+            tts?.stop()
+            narrandoHistoria = false
+        }
+    }
+
     val archivoFoto = vm.archivo(pieza.fotoPath)
     val paleta = rememberPaletaPieza(pieza.nombre)
 
@@ -108,6 +174,17 @@ fun CedulaScreen(
         val ordenadas = todasLasPiezas.sortedBy { it.id }
         val gIdx = (ordenadas.indexOfFirst { it.id == pieza.id } + 1).coerceAtLeast(pieza.id.toInt().coerceAtLeast(1))
         sIdx to gIdx
+    }
+    val exportarPdf: () -> Unit = {
+        runCatching {
+            CedulaPdfExporter.exportarYCompartirCedula(
+                context = contexto,
+                pieza = pieza,
+                archivoFoto = archivoFoto,
+                numeroGlobal = numeroGlobal,
+                mostrarValor = mostrarValor
+            )
+        }
     }
 
     // Animaciones de entrada y de Modo Contemplar (.imm en el prototipo HTML)
@@ -267,6 +344,48 @@ fun CedulaScreen(
                 }
 
                 // MARCO CENTRAL DE MUSEO (.fw / .fm: 216dp x 288dp)
+                val modificadorGestosMarco = if (modoContemplar) {
+                    Modifier
+                        .pointerInput(pieza.id, modoContemplar) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    if (zoomContemplar > 1.05f) {
+                                        zoomContemplar = 1f
+                                        offsetContemplar = Offset.Zero
+                                    } else {
+                                        zoomContemplar = 2.2f
+                                    }
+                                },
+                                onTap = {
+                                    if (zoomContemplar <= 1.05f) {
+                                        modoContemplar = false
+                                    } else {
+                                        zoomContemplar = 1f
+                                        offsetContemplar = Offset.Zero
+                                    }
+                                }
+                            )
+                        }
+                        .pointerInput(pieza.id, modoContemplar) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                val nuevaEscala = (zoomContemplar * zoom).coerceIn(1f, 3.5f)
+                                zoomContemplar = nuevaEscala
+                                if (nuevaEscala > 1.02f) {
+                                    val maxDesplX = size.width * (nuevaEscala - 1f) * 0.65f
+                                    val maxDesplY = size.height * (nuevaEscala - 1f) * 0.65f
+                                    offsetContemplar = Offset(
+                                        x = (offsetContemplar.x + pan.x).coerceIn(-maxDesplX, maxDesplX),
+                                        y = (offsetContemplar.y + pan.y).coerceIn(-maxDesplY, maxDesplY)
+                                    )
+                                } else {
+                                    offsetContemplar = Offset.Zero
+                                }
+                            }
+                        }
+                } else {
+                    Modifier.clickable { modoContemplar = true }
+                }
+
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -275,8 +394,11 @@ fun CedulaScreen(
                         .width(216.dp)
                         .height(288.dp)
                         .graphicsLayer {
-                            scaleX = escalaMarco
-                            scaleY = escalaMarco
+                            val escalaTotal = escalaMarco * zoomContemplar
+                            scaleX = escalaTotal
+                            scaleY = escalaTotal
+                            translationX = offsetContemplar.x
+                            translationY = offsetContemplar.y
                         }
                         .shadow(
                             elevation = 24.dp,
@@ -285,7 +407,7 @@ fun CedulaScreen(
                         )
                         .background(Color(0xFF0D0F14), RoundedCornerShape(2.dp))
                         .border(1.dp, Color(0xFF7A6733), RoundedCornerShape(2.dp))
-                        .clickable { modoContemplar = !modoContemplar }
+                        .then(modificadorGestosMarco)
                         .padding(10.dp)
                 ) {
                     Box(
@@ -374,18 +496,33 @@ fun CedulaScreen(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 34.dp)
                 ) {
-                    Text(
-                        text = String.format(
-                            Locale.forLanguageTag("es-MX"),
-                            "N.º %02d · %s",
-                            numeroGlobal,
-                            pieza.nombre.uppercase(Locale.forLanguageTag("es-MX"))
-                        ),
-                        fontSize = 9.5.sp,
-                        letterSpacing = 2.6.sp,
-                        color = MutedText,
-                        textAlign = TextAlign.Center
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val etiquetaZoom = if (zoomContemplar > 1.05f) {
+                            String.format(Locale.US, "ZOOM %.1f× · TOCA PARA RESTABLECER", zoomContemplar)
+                        } else {
+                            "PELLIZCA O TOCA DOS VECES PARA ZOOM"
+                        }
+                        Text(
+                            text = etiquetaZoom,
+                            fontSize = 8.sp,
+                            letterSpacing = 2.0.sp,
+                            color = gold.copy(alpha = 0.72f),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = String.format(
+                                Locale.forLanguageTag("es-MX"),
+                                "N.º %02d · %s",
+                                numeroGlobal,
+                                pieza.nombre.uppercase(Locale.forLanguageTag("es-MX"))
+                            ),
+                            fontSize = 9.5.sp,
+                            letterSpacing = 2.6.sp,
+                            color = MutedText,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
 
                 // Botón circular "Contemplar" (.ex) en la esquina inferior derecha del escenario
@@ -546,15 +683,28 @@ fun CedulaScreen(
                     }
 
                     // 4. CONTENIDO DE LA PESTAÑA ACTIVA (.pn)
-                    Column(
+                    AnimatedContent(
+                        targetState = tabSeleccionada,
+                        transitionSpec = {
+                            val haciaDerecha = targetState > initialState
+                            (slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) {
+                                if (haciaDerecha) it / 5 else -it / 5
+                            } + fadeIn(tween(260)))
+                                .togetherWith(
+                                    slideOutHorizontally(tween(220)) {
+                                        if (haciaDerecha) -it / 6 else it / 6
+                                    } + fadeOut(tween(180))
+                                )
+                        },
+                        label = "transicionTabsCedula",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 22.dp)
                             .padding(top = 6.dp, bottom = 40.dp)
                             .heightIn(min = 230.dp)
-                    ) {
-                        when (tabSeleccionada) {
-                            0 -> {
+                    ) { tabActiva ->
+                        when (tabActiva) {
+                            0 -> Column(modifier = Modifier.fillMaxWidth()) {
                                 // PESTAÑA 0: CÉDULA (.rw horizontales limpias)
                                 FilaCedulaMuseo(
                                     etiqueta = "ADQUIRIDA",
@@ -591,7 +741,7 @@ fun CedulaScreen(
                                 )
                             }
 
-                            1 -> {
+                            1 -> Column(modifier = Modifier.fillMaxWidth()) {
                                 // PESTAÑA 1: HISTORIA (.quote con comilla monumental “ y fecha en mayúsculas)
                                 val textoHistoria = pieza.notaPersonal?.takeIf { it.isNotBlank() }
                                     ?: "Cada pieza tiene una historia. Puedes escribir la suya al editar la cédula."
@@ -625,6 +775,45 @@ fun CedulaScreen(
                                     letterSpacing = 2.4.sp,
                                     color = MutedText
                                 )
+                                Spacer(Modifier.height(18.dp))
+                                Surface(
+                                    onClick = {
+                                        if (narrandoHistoria) {
+                                            tts?.stop()
+                                            narrandoHistoria = false
+                                        } else if (ttsListo) {
+                                            val textoVoz = "${pieza.nombre}. Colección ${pieza.franquicia}. $textoHistoria"
+                                            narrandoHistoria = true
+                                            tts?.speak(textoVoz, TextToSpeech.QUEUE_FLUSH, null, "cedula_${pieza.id}")
+                                        }
+                                    },
+                                    enabled = ttsListo || narrandoHistoria,
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (narrandoHistoria) Color(0xFF282012) else Color(0xFF14110B),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (narrandoHistoria) gold else GoldBorderActive
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (narrandoHistoria) Icons.Outlined.Stop else Icons.Outlined.Headphones,
+                                            contentDescription = null,
+                                            tint = gold,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = if (narrandoHistoria) "Detener narración" else "Escuchar historia",
+                                            color = gold,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
                             }
 
                             2 -> {
@@ -637,7 +826,7 @@ fun CedulaScreen(
             }
         }
 
-        // 5. BARRA SUPERIOR FLOTANTE (.sk): Volver | Editar | Más opciones
+        // 5. BARRA SUPERIOR FLOTANTE (.sk): Volver | Exportar PDF | Editar | Más opciones
         androidx.compose.animation.AnimatedVisibility(
             visible = !modoContemplar,
             enter = fadeIn(tween(300)),
@@ -665,6 +854,19 @@ fun CedulaScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BotonFlotanteCircular(
+                        descripcion = "Exportar cédula en PDF",
+                        lineColor = lineColor,
+                        enabled = !ocupado,
+                        onClick = exportarPdf
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PictureAsPdf,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     BotonFlotanteCircular(
                         descripcion = "Editar cédula",
                         lineColor = lineColor,
@@ -696,7 +898,7 @@ fun CedulaScreen(
         }
     }
 
-    // 6. HOJA MODAL DE OPCIONES (#sh): Mover a bodega, Destacar, Notificaciones, Eliminar
+    // 6. HOJA MODAL DE OPCIONES (#sh): Mover a bodega, Destacar, Exportar PDF, Editar, Notificaciones, Eliminar
     if (mostrarSheet) {
         ModalBottomSheet(
             onDismissRequest = { mostrarSheet = false },
@@ -748,6 +950,22 @@ fun CedulaScreen(
                     onClick = {
                         mostrarSheet = false
                         vm.destacar(pieza)
+                    }
+                )
+                AccionSheetMuseoItem(
+                    texto = "Exportar cédula en PDF",
+                    icono = {
+                        Icon(
+                            imageVector = Icons.Outlined.PictureAsPdf,
+                            contentDescription = null,
+                            tint = gold,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    },
+                    enabled = !ocupado,
+                    onClick = {
+                        mostrarSheet = false
+                        exportarPdf()
                     }
                 )
                 AccionSheetMuseoItem(

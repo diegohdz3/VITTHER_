@@ -1,5 +1,12 @@
 package com.diego.vitther.ui.screens.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -57,13 +64,28 @@ fun HomeRoute(
     vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
-    HomeScreen(
-        estado = estado,
-        onPiezaClick = onPiezaClick,
-        onAbrirColeccion = onAbrirColeccion,
-        onAgregarPieza = onAgregarPieza,
-        mostrarNichoAgregar = true
-    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        HomeScreen(
+            estado = estado,
+            onPiezaClick = onPiezaClick,
+            onAbrirColeccion = onAbrirColeccion,
+            onAgregarPieza = onAgregarPieza,
+            mostrarNichoAgregar = true
+        )
+        NotaCuratorialPrimerIngreso(
+            moduloKey = "inicio",
+            titulo = "Tu galería principal",
+            descripcion = "Esta es la vitrina destacada de tu museo personal:",
+            puntos = listOf(
+                "Desliza entre tus piezas exhibidas o toca un nicho para abrir su Cédula oficial.",
+                "Llega al nicho “+” al final del carrusel para incorporar una nueva figura.",
+                "El botón central inferior abre tu catálogo completo por salas."
+            ),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp)
+        )
+    }
 }
 
 /**
@@ -327,27 +349,38 @@ fun HomeScreen(
 
                             // 3. PLACA / CARTELA DE MUSEO (.plq)
                             val indiceSeguro = actual.coerceIn(0, totalPaginas - 1)
-                            if (indiceSeguro < piezas.size) {
-                                val central = piezas[indiceSeguro]
-                                PlacaMuseoLouvre(
-                                    franquicia = central.franquicia,
-                                    fabricante = central.linea,
-                                    titulo = central.nombre,
-                                    ubicacion = central.ubicacion?.takeIf { it.isNotBlank() } ?: "En exhibición",
-                                    edicionLimitada = central.edicionLimitada,
-                                    numeroEdicion = central.numeroEdicion,
-                                    onClick = { onPiezaClick(central.id) }
-                                )
-                            } else {
-                                PlacaMuseoLouvre(
-                                    franquicia = "TU PRÓXIMA PIEZA",
-                                    fabricante = null,
-                                    titulo = "Un nicho te espera",
-                                    ubicacion = "Toca para añadir",
-                                    edicionLimitada = false,
-                                    numeroEdicion = null,
-                                    onClick = onAgregarPieza
-                                )
+                            AnimatedContent(
+                                targetState = indiceSeguro,
+                                modifier = Modifier.fillMaxWidth(),
+                                transitionSpec = {
+                                    (fadeIn(tween(260, easing = FastOutSlowInEasing)) +
+                                        slideInVertically(tween(260)) { it / 6 })
+                                        .togetherWith(fadeOut(tween(160)))
+                                },
+                                label = "placaLouvre"
+                            ) { idxPlaca ->
+                                if (idxPlaca < piezas.size) {
+                                    val central = piezas[idxPlaca]
+                                    PlacaMuseoLouvre(
+                                        franquicia = central.franquicia,
+                                        fabricante = central.linea,
+                                        titulo = central.nombre,
+                                        ubicacion = central.ubicacion?.takeIf { it.isNotBlank() } ?: "En exhibición",
+                                        edicionLimitada = central.edicionLimitada,
+                                        numeroEdicion = central.numeroEdicion,
+                                        onClick = { onPiezaClick(central.id) }
+                                    )
+                                } else {
+                                    PlacaMuseoLouvre(
+                                        franquicia = "TU PRÓXIMA PIEZA",
+                                        fabricante = null,
+                                        titulo = "Un nicho te espera",
+                                        ubicacion = "Toca para añadir",
+                                        edicionLimitada = false,
+                                        numeroEdicion = null,
+                                        onClick = onAgregarPieza
+                                    )
+                                }
                             }
 
                             // 4. INDICADORES MINI-NICHO (.dots)

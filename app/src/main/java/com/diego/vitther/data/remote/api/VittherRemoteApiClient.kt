@@ -3,6 +3,7 @@ package com.diego.vitther.data.remote.api
 import com.diego.vitther.data.local.PiezaEntity
 import com.diego.vitther.data.local.WishEntity
 import com.diego.vitther.data.remote.dto.CapsulaCloudDto
+import com.diego.vitther.data.remote.dto.ColeccionCompartidaDto
 import com.diego.vitther.data.remote.dto.JikanCharacterDto
 import com.diego.vitther.data.remote.dto.JikanCharacterSearchResponseDto
 import com.diego.vitther.data.remote.dto.PiezaCloudDto
@@ -31,6 +32,16 @@ interface FirebaseMuseoApi {
     suspend fun sincronizarRespaldo(respaldo: RespaldoFirebaseDto): Boolean
     suspend fun obtenerRespaldo(): RespaldoFirebaseDto?
     suspend fun consultarEstadoConexion(): Boolean
+
+    suspend fun sincronizarRespaldoUsuario(uid: String?, respaldo: RespaldoFirebaseDto): Boolean =
+        sincronizarRespaldo(respaldo)
+
+    suspend fun obtenerRespaldoUsuario(uid: String?): RespaldoFirebaseDto? =
+        obtenerRespaldo()
+
+    suspend fun publicarExposicionCompartida(expo: ColeccionCompartidaDto): Boolean = false
+
+    suspend fun obtenerExposicionCompartida(codigo: String): ColeccionCompartidaDto? = null
 }
 
 class VittherRemoteApiClient(
@@ -45,6 +56,55 @@ class VittherRemoteApiClient(
 
     private val baseLimpia: String
         get() = firebaseBaseUrl.trim().removeSuffix("/").removeSuffix("/museos/default.json").removeSuffix(".json")
+
+    private fun rutaMuseo(uid: String?): String {
+        val limpiaUid = uid?.trim()?.replace(Regex("[^a-zA-Z0-9_-]"), "")
+        return if (!limpiaUid.isNullOrBlank()) "museos/usuarios/$limpiaUid.json" else "museos/default.json"
+    }
+
+    private fun sanitizarCodigo(codigo: String): String =
+        codigo.trim().uppercase().replace(Regex("[^A-Z0-9_-]"), "")
+
+    private suspend fun putJson(rutaRelativa: String, payloadJson: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val endpoint = URL("$baseLimpia/$rutaRelativa")
+            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                doOutput = true
+                connectTimeout = 6_000
+                readTimeout = 6_000
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            }
+            try {
+                OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payloadJson) }
+                conn.responseCode in 200..299
+            } catch (_: Exception) {
+                false
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    private suspend fun getJson(rutaRelativa: String): String? =
+        withContext(Dispatchers.IO) {
+            val endpoint = URL("$baseLimpia/$rutaRelativa")
+            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 6_000
+                readTimeout = 6_000
+                setRequestProperty("Accept", "application/json")
+            }
+            try {
+                if (conn.responseCode in 200..299) {
+                    val cuerpo = conn.inputStream.bufferedReader().use(BufferedReader::readText)
+                    cuerpo.takeUnless { it.isBlank() || it.trim() == "null" }
+                } else null
+            } catch (_: Exception) {
+                null
+            } finally {
+                conn.disconnect()
+            }
+        }
 
     override suspend fun buscarPersonajesColeccionables(consulta: String): List<JikanCharacterDto> =
         withContext(Dispatchers.IO) {
@@ -71,47 +131,34 @@ class VittherRemoteApiClient(
         }
 
     override suspend fun sincronizarRespaldo(respaldo: RespaldoFirebaseDto): Boolean =
-        withContext(Dispatchers.IO) {
-            val endpoint = URL("$baseLimpia/museos/default.json")
-            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
-                requestMethod = "PUT"
-                doOutput = true
-                connectTimeout = 6_000
-                readTimeout = 6_000
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            }
-            try {
-                val payload = json.encodeToString(respaldo)
-                OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload) }
-                conn.responseCode in 200..299
-            } catch (_: Exception) {
-                false
-            } finally {
-                conn.disconnect()
-            }
-        }
+        sincronizarRespaldoUsuario(null, respaldo)
 
     override suspend fun obtenerRespaldo(): RespaldoFirebaseDto? =
-        withContext(Dispatchers.IO) {
-            val endpoint = URL("$baseLimpia/museos/default.json")
-            val conn = (endpoint.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 6_000
-                readTimeout = 6_000
-                setRequestProperty("Accept", "application/json")
-            }
-            try {
-                if (conn.responseCode in 200..299) {
-                    val cuerpo = conn.inputStream.bufferedReader().use(BufferedReader::readText)
-                    if (cuerpo.isBlank() || cuerpo.trim() == "null") null
-                    else json.decodeFromString<RespaldoFirebaseDto>(cuerpo)
-                } else null
-            } catch (_: Exception) {
-                null
-            } finally {
-                conn.disconnect()
-            }
+        obtenerRespaldoUsuario(null)
+
+    override suspend fun sincronizarRespaldoUsuario(
+        uid: String?,
+        respaldo: RespaldoFirebaseDto
+    ): Boolean = putJson(rutaMuseo(uid), json.encodeToString(respaldo))
+
+    override suspend fun obtenerRespaldoUsuario(uid: String?): RespaldoFirebaseDto? =
+        getJson(rutaMuseo(uid))?.let { cuerpo ->
+            runCatching { json.decodeFromString<RespaldoFirebaseDto>(cuerpo) }.getOrNull()
         }
+
+    override suspend fun publicarExposicionCompartida(expo: ColeccionCompartidaDto): Boolean {
+        val code = sanitizarCodigo(expo.codigo)
+        if (code.isBlank()) return false
+        return putJson("compartidas/$code.json", json.encodeToString(expo.copy(codigo = code)))
+    }
+
+    override suspend fun obtenerExposicionCompartida(codigo: String): ColeccionCompartidaDto? {
+        val code = sanitizarCodigo(codigo)
+        if (code.isBlank()) return null
+        return getJson("compartidas/$code.json")?.let { cuerpo ->
+            runCatching { json.decodeFromString<ColeccionCompartidaDto>(cuerpo) }.getOrNull()
+        }
+    }
 
     override suspend fun consultarEstadoConexion(): Boolean =
         withContext(Dispatchers.IO) {
@@ -131,7 +178,10 @@ class VittherRemoteApiClient(
         }
 }
 
-fun PiezaEntity.toCloudDto(ahora: Long = System.currentTimeMillis()): PiezaCloudDto =
+fun PiezaEntity.toCloudDto(
+    ahora: Long = System.currentTimeMillis(),
+    fotoBase64: String? = null
+): PiezaCloudDto =
     PiezaCloudDto(
         idLocal = id,
         nombre = nombre,
@@ -146,7 +196,8 @@ fun PiezaEntity.toCloudDto(ahora: Long = System.currentTimeMillis()): PiezaCloud
         valorEstimadoCentavos = valorEstimadoCentavos,
         notaPersonal = notaPersonal,
         destacada = destacada,
-        sincronizadoEn = ahora
+        sincronizadoEn = ahora,
+        fotoBase64 = fotoBase64
     )
 
 fun CapsulaVista.toCloudDto(): CapsulaCloudDto =
@@ -159,7 +210,7 @@ fun CapsulaVista.toCloudDto(): CapsulaCloudDto =
         notaRevelada = nota
     )
 
-fun WishEntity.toCloudDto(): WishCloudDto =
+fun WishEntity.toCloudDto(fotoBase64: String? = null): WishCloudDto =
     WishCloudDto(
         idLocal = id,
         nombre = nombre,
@@ -169,5 +220,6 @@ fun WishEntity.toCloudDto(): WishCloudDto =
         metaPesos = metaPesos,
         progresoPorcentaje = progresoPorcentaje,
         fechaEstimadaLlegada = fechaEstimadaLlegada,
-        creadoEn = creadoEn
+        creadoEn = creadoEn,
+        fotoBase64 = fotoBase64
     )

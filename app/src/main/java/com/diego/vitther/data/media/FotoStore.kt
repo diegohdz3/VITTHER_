@@ -5,9 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.util.Base64
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 
@@ -28,6 +30,56 @@ class FotoStore(private val context: Context) {
         val destino = File(carpeta, "${UUID.randomUUID()}.jpg")
         destino.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) }
         "fotos/${destino.name}"
+    }
+
+    suspend fun codificarBase64(ruta: String?): String? = withContext(Dispatchers.IO) {
+        val file = archivo(ruta) ?: return@withContext null
+        runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 960) sample *= 2
+            val decoded = BitmapFactory.decodeFile(
+                file.absolutePath,
+                BitmapFactory.Options().apply { inSampleSize = sample }
+            ) ?: return@runCatching null
+            var scaled: Bitmap? = null
+            try {
+                val factor = minOf(1f, 960f / maxOf(decoded.width, decoded.height))
+                val target = if (factor < 1f) {
+                    scaled = Bitmap.createScaledBitmap(
+                        decoded,
+                        (decoded.width * factor).toInt().coerceAtLeast(1),
+                        (decoded.height * factor).toInt().coerceAtLeast(1),
+                        true
+                    )
+                    scaled!!
+                } else {
+                    decoded
+                }
+                val stream = ByteArrayOutputStream()
+                if (!target.compress(Bitmap.CompressFormat.JPEG, 75, stream)) return@runCatching null
+                Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+            } finally {
+                scaled?.takeIf { it !== decoded }?.recycle()
+                decoded.recycle()
+            }
+        }.getOrNull()
+    }
+
+    suspend fun decodificarBase64(base64: String?): String? = withContext(Dispatchers.IO) {
+        if (base64.isNullOrBlank()) return@withContext null
+        runCatching {
+            val bytes = Base64.decode(base64, Base64.DEFAULT)
+            if (bytes.isEmpty()) return@runCatching null
+            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
+            try {
+                guardarBitmap(bmp)
+            } finally {
+                bmp.recycle()
+            }
+        }.getOrNull()
     }
 
     suspend fun importar(uri: Uri): String = withContext(Dispatchers.IO) {

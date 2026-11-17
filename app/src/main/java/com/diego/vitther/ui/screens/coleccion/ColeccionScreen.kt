@@ -1,6 +1,15 @@
 package com.diego.vitther.ui.screens.coleccion
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -11,6 +20,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -56,7 +68,9 @@ fun ColeccionScreen(
     abrir: (Long) -> Unit,
     categoria: String? = null,
     volver: (() -> Unit)? = null,
-    agregarEnSala: (String) -> Unit = { agregar() }
+    agregarEnSala: (String) -> Unit = { agregar() },
+    onCompartirSala: (String?) -> Unit = {},
+    onAbrirExposicion: (String) -> Unit = {}
 ) {
     var bodega by rememberSaveable(categoria) {
         val deCategoria = piezas.filter { categoria == null || it.franquicia == categoria }
@@ -69,16 +83,34 @@ fun ColeccionScreen(
     var mostrarBusqueda by rememberSaveable { mutableStateOf(false) }
     var franquiciaSeleccionada by rememberSaveable(categoria) { mutableStateOf(categoria) }
     var mostrarSheetVista by rememberSaveable { mutableStateOf(false) }
+    var mostrarVisitarSheet by rememberSaveable { mutableStateOf(false) }
 
-    // Configuración de vista de marcos en el Museo ("var", "v", "h" y columnas 1, 2, 3)
+    // Configuración de vista de marcos en el Museo ("var", "v", "h" y columnas 1, 2, 3) y orden
     var modoProporcion by rememberSaveable { mutableStateOf("var") }
     var columnasMarcos by rememberSaveable { mutableIntStateOf(2) }
+    var ordenCuraduria by rememberSaveable { mutableStateOf("recientes") }
 
-    // Paleta atmosférica dinámica: Museo (azul galería nocturno) vs Bodega (cava subterránea cálida)
-    val pageBg = if (bodega) Color(0xFF110A05) else Color(0xFF0A0D17)
-    val pageTop = if (bodega) Color(0xFF27150A) else Color(0xFF0B1224)
-    val gold = if (bodega) Color(0xFFE8B472) else Color(0xFFE8C97A)
-    val lineBorder = if (bodega) Color(0xFF33231A) else Color(0xFF26231C)
+    // Paleta atmosférica dinámica animada: Museo (azul galería nocturno) vs Bodega (cava subterránea cálida)
+    val pageBg by animateColorAsState(
+        targetValue = if (bodega) Color(0xFF110A05) else Color(0xFF0A0D17),
+        animationSpec = tween(durationMillis = 420),
+        label = "colPageBg"
+    )
+    val pageTop by animateColorAsState(
+        targetValue = if (bodega) Color(0xFF27150A) else Color(0xFF0B1224),
+        animationSpec = tween(durationMillis = 420),
+        label = "colPageTop"
+    )
+    val gold by animateColorAsState(
+        targetValue = if (bodega) Color(0xFFE8B472) else Color(0xFFE8C97A),
+        animationSpec = tween(durationMillis = 420),
+        label = "colGold"
+    )
+    val lineBorder by animateColorAsState(
+        targetValue = if (bodega) Color(0xFF33231A) else Color(0xFF26231C),
+        animationSpec = tween(durationMillis = 420),
+        label = "colLineBorder"
+    )
     val muted = Color(0xFF8D8777)
 
     // Índices globales de catálogo para mostrar "N.º 01", "N.º 02", etc.
@@ -86,10 +118,16 @@ fun ColeccionScreen(
         piezas.sortedBy { it.id }.mapIndexed { idx, p -> p.id to (idx + 1) }.toMap()
     }
 
-    val visibles = remember(piezas, bodega, busqueda) {
-        piezas.filter {
+    val visibles = remember(piezas, bodega, busqueda, ordenCuraduria) {
+        val filtradas = piezas.filter {
             (it.estado == EstadoPieza.BODEGA) == bodega &&
                 (it.nombre.contains(busqueda, true) || it.franquicia.contains(busqueda, true))
+        }
+        when (ordenCuraduria) {
+            "antiguas" -> filtradas.sortedBy { it.fechaAdquisicion }
+            "valor" -> filtradas.sortedByDescending { it.valorEstimadoCentavos ?: -1L }
+            "alfabetico" -> filtradas.sortedBy { it.nombre.lowercase(Locale.forLanguageTag("es-MX")) }
+            else -> filtradas.sortedByDescending { it.fechaRegistro }
         }
     }
 
@@ -125,47 +163,62 @@ fun ColeccionScreen(
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        if (franquiciaSeleccionada != null) {
-            val listaSalas = salasPorFranquicia.keys.toList()
-            val numeroSala = (listaSalas.indexOfFirst { it.equals(franquiciaSeleccionada, ignoreCase = true) } + 1)
-                .coerceAtLeast(1)
-            val piezasDeSala = piezas.filter {
-                it.franquicia.equals(franquiciaSeleccionada, ignoreCase = true) &&
-                    (it.estado == EstadoPieza.BODEGA) == bodega
-            }.ifEmpty {
-                piezas.filter { it.franquicia.equals(franquiciaSeleccionada, ignoreCase = true) }
-            }
+        AnimatedContent(
+            targetState = franquiciaSeleccionada,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 4 } + fadeIn(tween(280)))
+                        .togetherWith(slideOutHorizontally(tween(280)) { -it / 5 } + fadeOut(tween(220)))
+                } else {
+                    (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { -it / 5 } + fadeIn(tween(280)))
+                        .togetherWith(slideOutHorizontally(tween(260)) { it / 4 } + fadeOut(tween(220)))
+                }
+            },
+            label = "transicionSalaColeccion"
+        ) { salaElegida ->
+            if (salaElegida != null) {
+                val listaSalas = salasPorFranquicia.keys.toList()
+                val numeroSala = (listaSalas.indexOfFirst { it.equals(salaElegida, ignoreCase = true) } + 1)
+                    .coerceAtLeast(1)
+                val piezasDeSala = piezas.filter {
+                    it.franquicia.equals(salaElegida, ignoreCase = true) &&
+                        (it.estado == EstadoPieza.BODEGA) == bodega
+                }.ifEmpty {
+                    piezas.filter { it.franquicia.equals(salaElegida, ignoreCase = true) }
+                }
 
-            VistaSalaCompleta(
-                numeroSala = numeroSala,
-                franquicia = franquiciaSeleccionada!!,
-                piezas = piezasDeSala,
-                indiceGlobalPorId = indiceGlobalPorId,
-                vm = vm,
-                modoProporcion = modoProporcion,
-                columnas = columnasMarcos,
-                abrirPieza = abrir,
-                agregarEnSala = { agregarEnSala(franquiciaSeleccionada!!) },
-                abrirOpcionesVista = { mostrarSheetVista = true },
-                volver = {
-                    if (categoria != null && volver != null) {
-                        volver()
-                    } else {
-                        franquiciaSeleccionada = null
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            )
-        } else {
+                VistaSalaCompleta(
+                    numeroSala = numeroSala,
+                    franquicia = salaElegida,
+                    piezas = piezasDeSala,
+                    indiceGlobalPorId = indiceGlobalPorId,
+                    vm = vm,
+                    modoProporcion = modoProporcion,
+                    columnas = columnasMarcos,
+                    abrirPieza = abrir,
+                    agregarEnSala = { agregarEnSala(salaElegida) },
+                    abrirOpcionesVista = { mostrarSheetVista = true },
+                    onCompartirSala = { onCompartirSala(salaElegida) },
+                    volver = {
+                        if (categoria != null && volver != null) {
+                            volver()
+                        } else {
+                            franquiciaSeleccionada = null
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                )
+            } else {
             Column(
                 Modifier
                     .fillMaxSize()
                     .background(pageBg)
                     .padding(padding)
             ) {
-                // 1. CABECERA (.head): "Colección" + Botón "Cómo ver tus figuras" + Botón "Buscar"
+                // 1. CABECERA (.head): "Colección" + Visitar + Compartir + Vista + Buscar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -182,6 +235,38 @@ fun ColeccionScreen(
                         color = Color(0xFFF2EAD8)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = { mostrarVisitarSheet = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color(0xB312141A), CircleShape)
+                                .border(1.dp, lineBorder, CircleShape)
+                                .semantics { contentDescription = "Visitar colección compartida" }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.TravelExplore,
+                                contentDescription = null,
+                                tint = gold,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        if (piezas.isNotEmpty()) {
+                            IconButton(
+                                onClick = { onCompartirSala(null) },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color(0xB312141A), CircleShape)
+                                    .border(1.dp, lineBorder, CircleShape)
+                                    .semantics { contentDescription = "Compartir colección" }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF2EAD8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                         if (!bodega) {
                             IconButton(
                                 onClick = { mostrarSheetVista = true },
@@ -253,6 +338,17 @@ fun ColeccionScreen(
                     )
                 }
 
+                NotaCuratorialPrimerIngreso(
+                    moduloKey = "coleccion",
+                    titulo = "Tu colección por salas",
+                    descripcion = "Organiza tus figuras por franquicia o compártelas en vitrina virtual:",
+                    puntos = listOf(
+                        "Alterna entre Museo (exhibición) y Bodega (resguardo).",
+                        "Toca Compartir en cualquier sala (ej. Naruto, Star Wars) para enviar un link de solo lectura a tus amigos.",
+                        "Usa el ícono de brújula arriba para explorar la colección compartida de otro curador."
+                    )
+                )
+
                 // 3. BARRA DE BÚSQUEDA DESPLEGABLE (.search)
                 AnimatedVisibility(visible = mostrarBusqueda || busqueda.isNotBlank()) {
                     OutlinedTextField(
@@ -274,105 +370,124 @@ fun ColeccionScreen(
                 }
 
                 // 4. CONTENIDO: SALAS DE MUSEO O CAVA DE VINOS (BODEGA)
-                if (visibles.isEmpty()) {
-                    val titulo = when {
-                        busqueda.isNotBlank() -> "Ninguna pieza coincide"
-                        bodega -> "Tu bodega está vacía"
-                        else -> "Tu museo espera su primera pieza"
-                    }
-                    val descripcion = when {
-                        busqueda.isNotBlank() -> "Prueba otro nombre o franquicia."
-                        bodega -> "Guarda piezas en resguardo dentro de tu cava personal."
-                        else -> "Registra una pieza y colócala en su propia sala de exhibición."
-                    }
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        EstadoVacio(titulo, descripcion, if (busqueda.isBlank()) "Agregar pieza" else null, agregar)
-                    }
-                } else if (!bodega) {
-                    // ==================== MODO MUSEO (SALAS DIGITALES) ====================
-                    val entradasSalas = salasPorFranquicia.entries.toList()
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 96.dp)
-                    ) {
-                        itemsIndexed(entradasSalas, key = { _, item -> "sala_${item.key}" }) { idx, (franquicia, grupo) ->
-                            SalaMuseoSection(
-                                numeroSala = idx + 1,
-                                franquicia = franquicia,
-                                piezas = grupo,
-                                indiceGlobalPorId = indiceGlobalPorId,
-                                vm = vm,
-                                modoProporcion = modoProporcion,
-                                columnas = columnasMarcos,
-                                hayBusqueda = busqueda.isNotBlank(),
-                                onAbrirSala = { franquiciaSeleccionada = franquicia },
-                                onAbrirPieza = abrir,
-                                onAgregarEnSala = { agregarEnSala(franquicia) }
-                            )
+                AnimatedContent(
+                    targetState = bodega to visibles.isEmpty(),
+                    transitionSpec = {
+                        val haciaBodega = targetState.first && !initialState.first
+                        val haciaMuseo = !targetState.first && initialState.first
+                        when {
+                            haciaBodega -> (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(260)))
+                                .togetherWith(slideOutHorizontally(tween(240)) { -it / 5 } + fadeOut(tween(200)))
+                            haciaMuseo -> (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 5 } + fadeIn(tween(260)))
+                                .togetherWith(slideOutHorizontally(tween(240)) { it / 5 } + fadeOut(tween(200)))
+                            else -> fadeIn(tween(240)).togetherWith(fadeOut(tween(180)))
                         }
-                        item {
-                            val numSalas = entradasSalas.size
-                            val etqSalas = if (numSalas == 1) "1 SALA" else "$numSalas SALAS"
-                            val etqPiezas = if (visibles.size == 1) "1 PIEZA" else "${visibles.size} PIEZAS"
-                            Text(
-                                text = "$etqSalas · $etqPiezas",
-                                fontSize = 10.sp,
-                                letterSpacing = 2.2.sp,
-                                color = muted,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 24.dp, bottom = 12.dp)
-                            )
+                    },
+                    label = "transicionModoColeccion",
+                    modifier = Modifier.weight(1f)
+                ) { (enBodega, estaVacio) ->
+                    if (estaVacio) {
+                        val titulo = when {
+                            busqueda.isNotBlank() -> "Ninguna pieza coincide"
+                            enBodega -> "Tu bodega está vacía"
+                            else -> "Tu museo espera su primera pieza"
                         }
-                    }
-                } else {
-                    // ==================== MODO BODEGA (CAVA DE VINOS) ====================
-                    val entradasRacks = salasPorFranquicia.entries.toList()
-                    val ultimaEnEntrar = remember(visibles) {
-                        visibles.maxWithOrNull(compareBy<PiezaEntity> { it.fechaAdquisicion }.thenBy { it.id })
-                    }
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 96.dp)
-                    ) {
-                        if (busqueda.isBlank() && ultimaEnEntrar != null) {
-                            item(key = "hero_cava") {
-                                HeroCavaBodega(
-                                    pieza = ultimaEnEntrar,
+                        val descripcion = when {
+                            busqueda.isNotBlank() -> "Prueba otro nombre o franquicia."
+                            enBodega -> "Guarda piezas en resguardo dentro de tu cava personal."
+                            else -> "Registra una pieza y colócala en su propia sala de exhibición."
+                        }
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            EstadoVacio(titulo, descripcion, if (busqueda.isBlank()) "Agregar pieza" else null, agregar)
+                        }
+                    } else if (!enBodega) {
+                        // ==================== MODO MUSEO (SALAS DIGITALES) ====================
+                        val entradasSalas = salasPorFranquicia.entries.toList()
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 96.dp)
+                        ) {
+                            itemsIndexed(entradasSalas, key = { _, item -> "sala_${item.key}" }) { idx, (franquicia, grupo) ->
+                                SalaMuseoSection(
+                                    numeroSala = idx + 1,
+                                    franquicia = franquicia,
+                                    piezas = grupo,
+                                    indiceGlobalPorId = indiceGlobalPorId,
                                     vm = vm,
-                                    onClick = { abrir(ultimaEnEntrar.id) }
+                                    modoProporcion = modoProporcion,
+                                    columnas = columnasMarcos,
+                                    hayBusqueda = busqueda.isNotBlank(),
+                                    onAbrirSala = { franquiciaSeleccionada = franquicia },
+                                    onAbrirPieza = abrir,
+                                    onAgregarEnSala = { agregarEnSala(franquicia) },
+                                    onCompartirSala = { onCompartirSala(franquicia) }
+                                )
+                            }
+                            item {
+                                val numSalas = entradasSalas.size
+                                val etqSalas = if (numSalas == 1) "1 SALA" else "$numSalas SALAS"
+                                val etqPiezas = if (visibles.size == 1) "1 PIEZA" else "${visibles.size} PIEZAS"
+                                Text(
+                                    text = "$etqSalas · $etqPiezas",
+                                    fontSize = 10.sp,
+                                    letterSpacing = 2.2.sp,
+                                    color = muted,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 24.dp, bottom = 12.dp)
                                 )
                             }
                         }
-                        itemsIndexed(entradasRacks, key = { _, item -> "rack_${item.key}" }) { idx, (franquicia, grupo) ->
-                            RackCavaFranquicia(
-                                numeroRack = idx + 1,
-                                franquicia = franquicia,
-                                piezas = grupo,
-                                vm = vm,
-                                onAbrirPieza = abrir,
-                                onGuardarEnRack = { agregarEnSala(franquicia) }
-                            )
+                    } else {
+                        // ==================== MODO BODEGA (CAVA DE VINOS) ====================
+                        val entradasRacks = salasPorFranquicia.entries.toList()
+                        val ultimaEnEntrar = remember(visibles) {
+                            visibles.maxWithOrNull(compareBy<PiezaEntity> { it.fechaAdquisicion }.thenBy { it.id })
                         }
-                        item {
-                            val numRacks = entradasRacks.size
-                            val etqRacks = if (numRacks == 1) "1 RACK" else "$numRacks RACKS"
-                            val etqPiezas = if (visibles.size == 1) "1 PIEZA GUARDADA" else "${visibles.size} PIEZAS GUARDADAS"
-                            Text(
-                                text = "$etqRacks · $etqPiezas",
-                                fontSize = 10.sp,
-                                letterSpacing = 2.2.sp,
-                                color = muted,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 24.dp, bottom = 12.dp)
-                            )
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 96.dp)
+                        ) {
+                            if (busqueda.isBlank() && ultimaEnEntrar != null) {
+                                item(key = "hero_cava") {
+                                    HeroCavaBodega(
+                                        pieza = ultimaEnEntrar,
+                                        vm = vm,
+                                        onClick = { abrir(ultimaEnEntrar.id) }
+                                    )
+                                }
+                            }
+                            itemsIndexed(entradasRacks, key = { _, item -> "rack_${item.key}" }) { idx, (franquicia, grupo) ->
+                                RackCavaFranquicia(
+                                    numeroRack = idx + 1,
+                                    franquicia = franquicia,
+                                    piezas = grupo,
+                                    vm = vm,
+                                    onAbrirPieza = abrir,
+                                    onGuardarEnRack = { agregarEnSala(franquicia) }
+                                )
+                            }
+                            item {
+                                val numRacks = entradasRacks.size
+                                val etqRacks = if (numRacks == 1) "1 RACK" else "$numRacks RACKS"
+                                val etqPiezas = if (visibles.size == 1) "1 PIEZA GUARDADA" else "${visibles.size} PIEZAS GUARDADAS"
+                                Text(
+                                    text = "$etqRacks · $etqPiezas",
+                                    fontSize = 10.sp,
+                                    letterSpacing = 2.2.sp,
+                                    color = muted,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 24.dp, bottom = 12.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
         }
     }
 
@@ -467,6 +582,52 @@ fun ColeccionScreen(
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "ORDEN DE CURADURÍA",
+                    fontSize = 11.sp,
+                    letterSpacing = 1.2.sp,
+                    color = muted
+                )
+                Spacer(Modifier.height(8.dp))
+                val opcionesOrden = listOf(
+                    listOf("recientes" to "Recientes", "antiguas" to "Antiguas"),
+                    listOf("valor" to "Mayor valor", "alfabetico" to "A–Z")
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    opcionesOrden.forEach { fila ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            fila.forEach { (clave, etiqueta) ->
+                                val activo = ordenCuraduria == clave
+                                Surface(
+                                    onClick = { ordenCuraduria = clave },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (activo) Color(0xFF221C11) else Color(0xFF191C24),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (activo) Color(0xFFE8C97A) else Color(0xFF26231C)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = etiqueta,
+                                            color = if (activo) Color(0xFFE8C97A) else Color(0xFFD6CFC2),
+                                            fontSize = 13.sp,
+                                            fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(20.dp))
                 Button(
                     onClick = { mostrarSheetVista = false },
@@ -483,6 +644,13 @@ fun ColeccionScreen(
                 }
             }
         }
+    }
+
+    if (mostrarVisitarSheet) {
+        VisitarExposicionSheet(
+            onDismiss = { mostrarVisitarSheet = false },
+            onVisitarCodigo = onAbrirExposicion
+        )
     }
 }
 
@@ -545,7 +713,8 @@ private fun SalaMuseoSection(
     hayBusqueda: Boolean,
     onAbrirSala: () -> Unit,
     onAbrirPieza: (Long) -> Unit,
-    onAgregarEnSala: () -> Unit
+    onAgregarEnSala: () -> Unit,
+    onCompartirSala: () -> Unit = {}
 ) {
     val gold = Color(0xFFE8C97A)
     val muted = Color(0xFF8D8777)
@@ -629,6 +798,24 @@ private fun SalaMuseoSection(
                         color = muted,
                         fontWeight = FontWeight.Light
                     )
+                    Surface(
+                        onClick = onCompartirSala,
+                        shape = CircleShape,
+                        color = Color(0x12E8C97A),
+                        border = BorderStroke(1.dp, Color(0xFF5A4A22)),
+                        modifier = Modifier
+                            .size(36.dp)
+                            .semantics { contentDescription = "Compartir sala $franquicia" }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Share,
+                                contentDescription = null,
+                                tint = gold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                     Surface(
                         onClick = onAbrirSala,
                         shape = CircleShape,
@@ -1062,6 +1249,7 @@ private fun VistaSalaCompleta(
     abrirPieza: (Long) -> Unit,
     agregarEnSala: () -> Unit,
     abrirOpcionesVista: () -> Unit,
+    onCompartirSala: () -> Unit = {},
     volver: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1101,15 +1289,32 @@ private fun VistaSalaCompleta(
                     )
                 }
             }
-            IconButton(
-                onClick = abrirOpcionesVista,
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color(0xB312141A), CircleShape)
-                    .border(1.dp, Color(0xFF26231C), CircleShape)
-                    .semantics { contentDescription = "Cómo ver tus figuras" }
-            ) {
-                IconoMosaicoGaleria(color = Color(0xFFF2EAD8))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(
+                    onClick = onCompartirSala,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xB312141A), CircleShape)
+                        .border(1.dp, Color(0xFF26231C), CircleShape)
+                        .semantics { contentDescription = "Compartir sala $franquicia" }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Share,
+                        contentDescription = null,
+                        tint = gold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(
+                    onClick = abrirOpcionesVista,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xB312141A), CircleShape)
+                        .border(1.dp, Color(0xFF26231C), CircleShape)
+                        .semantics { contentDescription = "Cómo ver tus figuras" }
+                ) {
+                    IconoMosaicoGaleria(color = Color(0xFFF2EAD8))
+                }
             }
         }
 
